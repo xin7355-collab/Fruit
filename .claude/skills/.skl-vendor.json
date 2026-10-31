@@ -1,0 +1,42 @@
+{
+  "skills": [
+    "app-guardrails-audit",
+    "ci-cd-pipeline-builder",
+    "data-quality-auditor",
+    "dependency-auditor",
+    "e2e-testing",
+    "error-handling",
+    "focused-fix",
+    "performance-optimization",
+    "python-testing",
+    "verification-before-completion"
+  ],
+  "source_repo": "https://github.com/xin7355-collab/skl",
+  "source_commit": "d030e27",
+  "updated_at": "2026-10-31T08:27:12Z",
+  "packs": [],
+  "extra_skills": [
+    "community/skills/performance-optimization",
+    "ecc/skills/e2e-testing",
+    "ecc/skills/error-handling",
+    "ecc/skills/python-testing",
+    "engineering/data-quality-auditor/skills/data-quality-auditor",
+    "engineering/skills/ci-cd-pipeline-builder",
+    "engineering/skills/dependency-auditor",
+    "engineering/skills/focused-fix",
+    "superpowers/skills/verification-before-completion",
+    "xin-toolkit/skills/app-guardrails-audit"
+  ],
+  "hashes": {
+    "app-guardrails-audit": "b1bef1b2680a1630c889d0579542c22e6451585ef4ef9cada876467428fa973b",
+    "ci-cd-pipeline-builder": "047f0ae5ea0328ba55f743f03fde579772c5cadd35c719328356568777450810",
+    "data-quality-auditor": "f01728a307e37ca4607845767dc1b6889db5969bc4da3473ffd4655072cab4f9",
+    "dependency-auditor": "3056a167d0bdc8be83b16b7b0482fa5fd0bf650ab3fb1fbf145bc3a579968012",
+    "e2e-testing": "b1048eeaa3e5a7bb0244cad46831715d2c64f8d92f98ff74d4b12dff897fbe74",
+    "error-handling": "5496517e3b51b910935dd20c00ecf9381598685e3533e213f4a8d0183eaa8442",
+    "focused-fix": "baa15e0e5af817cb7f6160d76174de45c6f798f81e2b80844cbf3a9df32c1bb5",
+    "performance-optimization": "f8b8eaf2e2c75f48f30f647d9193bf90620619f57b1805c17466c63a4236d202",
+    "python-testing": "e61acf373af75412d35a96907c28bfd9504db0b963dc55b53bb233a514516303",
+    "verification-before-completion": "fc484bd3e36289c1c62a8c54750d035e1b479a981638f87b3015f3ceaccc5160"
+  }
+}
