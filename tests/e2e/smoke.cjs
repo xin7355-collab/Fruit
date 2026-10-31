@@ -340,6 +340,85 @@ async function checkWeatherTabs(ctx, url) {
   await p.close();
 }
 
+async function checkMerchantR4(ctx, browser, iphone, url) {
+  // 2026-10-31 使用者要求：水果排在蔬菜前（看板、比價、設定）、比價可打字找、天氣頁換地區、設定拿掉天氣
+  const p = await ctx.newPage(); const errs = [];
+  p.on("pageerror", (e) => errs.push(e.message));
+  await p.goto(url, { waitUntil: "networkidle" });
+  if (await p.locator("#clModal.on").count()) await p.click("#closeCl");
+  const first = (sel) => p.evaluate((s) => { const b = document.querySelector(s); return b ? b.textContent.trim() : ""; }, sel);
+  const b0 = await first("#catbar button");
+  check(b0.includes("水果") && (await first("#catbar button.on")).includes("水果"), `merchant 看板第一顆是水果、預設選它（${b0}）`);
+  await p.click('.tab[data-t="compare"]'); await p.waitForTimeout(500);
+  check((await first("#cmpCat button")).includes("水果"), "merchant 比價第一顆是水果");
+  // 打字搜尋：俗名「芭樂」→ 番石榴
+  const hasGuava = await p.evaluate(() => Object.keys(cropMap()).includes("番石榴"));
+  await p.fill("#cmpSearch", "芭樂"); await p.waitForTimeout(300);
+  const sug = await p.evaluate(() => [...document.querySelectorAll("#cmpSug button")].map((b) => b.dataset.c));
+  if (hasGuava) {
+    check(sug[0] === "番石榴", `merchant 比價打「芭樂」第一個建議是番石榴（${sug.join(",")}）`);
+    await p.click("#cmpSug button"); await p.waitForTimeout(500);
+    check((await p.inputValue("#cmpCrop")) === "番石榴" && (await p.locator(".cmprow").count()) > 0, "merchant 點建議後比價換成番石榴、有排名");
+    check((await p.inputValue("#cmpSearch")) === "" && !(await p.locator("#cmpSug").isVisible()), "merchant 選好後搜尋框清空、建議收起");
+  } else check(false, "merchant 測試資料沒有番石榴，無法驗打字搜尋");
+  await p.fill("#cmpSearch", "高麗菜"); await p.press("#cmpSearch", "Enter"); await p.waitForTimeout(500);
+  check((await p.inputValue("#cmpCrop")) === "甘藍" && (await first("#cmpCat button.on")).includes("蔬菜"), "merchant 打「高麗菜」按 Enter → 甘藍、類別自動切到蔬菜");
+  await p.fill("#cmpSearch", "不存在的菜"); await p.waitForTimeout(300);
+  check(((await p.textContent("#cmpSug")) || "").includes("找不到"), "merchant 找不到時有說");
+  await p.fill("#cmpSearch", "");
+  check(await noHScroll(p), "merchant 比價加了搜尋框沒有橫向捲動");
+  await p.screenshot({ path: path.join(OUT, "merchant-compare-search.png") });
+  // 設定：沒有天氣地區、我的品項水果在前
+  await p.click("#gear"); await p.waitForTimeout(400);
+  const st = (await p.textContent("#modal")) || "";
+  check(!/天氣預報地區/.test(st) && (await p.locator("#regionSelect").count()) === 0, "merchant 設定裡沒有天氣地區了");
+  check((await first("#cropPick .pickh span")).includes("水果"), "merchant 設定「我的品項」水果在前");
+  await p.keyboard.press("Escape"); await p.goto(url, { waitUntil: "networkidle" });
+  // 天氣頁：✏️ 修改
+  await p.click('.tab[data-t="weather"]'); await p.waitForTimeout(400);
+  check((await p.locator("#wxLoc").count()) === 1 && (await p.locator("#wxEdit").count()) === 1, "merchant 天氣標題旁有「現在位置」「修改」");
+  check(!(await p.locator("#wxRegion").isVisible()), "merchant 地區選單平常收起");
+  await p.click("#wxEdit"); await p.waitForTimeout(200);
+  const opts = await p.evaluate(() => [...document.querySelectorAll("#wxRegion option")].map((o) => o.value));
+  const pick = opts.find((c) => c.includes("花蓮")) || opts[opts.length - 1];
+  await p.selectOption("#wxRegion", pick); await p.waitForTimeout(300);
+  check(((await p.textContent(".wx-h")) || "").includes(pick) && (await p.evaluate(() => localStorage.getItem("jb_region"))) === pick, `merchant 手動改地區 → 標題變 ${pick}、有記住`);
+  check(!(await p.locator("#wxRegion").isVisible()), "merchant 選完選單自動收起");
+  const hb = await p.evaluate(() => { const h = document.querySelector(".wx-hrow").getBoundingClientRect(), b = document.querySelector(".wx-hbtns").getBoundingClientRect();
+    return b.right <= window.innerWidth + 1 && b.top < h.top + 40; });
+  check(hb && await noHScroll(p), "merchant 兩顆按鈕在標題右邊、沒有超出畫面");
+  await p.screenshot({ path: path.join(OUT, "merchant-weather-head.png") });
+  check(errs.length === 0, `merchant 本輪新功能沒有 JS 錯誤${errs.length ? "：" + errs.slice(0, 2).join(" | ") : ""}`);
+  await p.close();
+  // 📍 現在位置：同一個 iPhone 環境，給台中座標；沒權限時要說怎麼開
+  for (const [perm, want] of [[true, "高雄市"], [false, "定位服務"]]) {
+    const c2 = await browser.newContext({ ...iphone, serviceWorkers: "block", geolocation: { latitude: 22.63, longitude: 120.30 }, permissions: perm ? ["geolocation"] : [] });
+    const q = await c2.newPage();
+    await q.goto(url, { waitUntil: "networkidle" });
+    if (await q.locator("#clModal.on").count()) await q.click("#closeCl");
+    await q.click('.tab[data-t="weather"]'); await q.waitForTimeout(300);
+    await q.click("#wxLoc"); await q.waitForTimeout(1500);
+    const t = (perm ? await q.textContent(".wx-h") : await q.textContent("#wxMsg")) || "";
+    check(t.includes(want), `merchant 現在位置（${perm ? "有權限→高雄（預設是台中，要真的換過去）" : "沒權限→教怎麼開"}）：${t.trim().slice(0, 30)}`);
+    await c2.close();
+  }
+}
+
+async function checkUpdateBar(ctx, url, name) {
+  // 版本更新提醒：version.json 比較新才出現提示；一樣就不出現
+  for (const newer of [true, false]) {
+    const p = await ctx.newPage();
+    const cur = JSON.parse(fs.readFileSync(path.join(ROOT, name === "merchant" ? "merchant" : "", "version.json"), "utf8")).v;
+    await p.route("**/version.json", (r) => r.fulfill({ json: { v: newer ? "v9.9.9" : cur } }));
+    await p.goto(url, { waitUntil: "networkidle" });
+    await p.waitForTimeout(3600);
+    const n = await p.locator("#updBar").count();
+    check(newer ? n === 1 : n === 0, `${name} ${newer ? "有新版→出現更新提示" : "已是最新版→不出現提示"}`);
+    if (newer && n) { check(await noHScroll(p), `${name} 更新提示沒有造成橫向捲動`); await p.screenshot({ path: path.join(OUT, `${name}-update-bar.png`) }); }
+    await p.close();
+  }
+}
+
 async function checkLazyVariants(page, name, json) {
   const before = json.filter(([, p]) => p.endsWith("_v.json")).length;
   check(before === 0, `${name} 首次載入沒有下載品種歷史（_v.json）`);
@@ -393,6 +472,7 @@ async function visitTabs(page, name, tabs) {
   await checkNoJudgmentAndNames(f.page, "farmer");
   await checkLargeFont(ctx, base, "farmer");
   await checkTyphoonMap(ctx, base, "farmer");
+  await checkUpdateBar(ctx, base, "farmer");
   await f.page.goto(base, { waitUntil: "networkidle" });
   await visitTabs(f.page, "farmer", ["forecast", "harvest", "market"]);
   const lsFarmer = await f.page.evaluate(() => Object.keys(localStorage));
@@ -425,6 +505,8 @@ async function visitTabs(page, name, tabs) {
   await checkLargeFont(ctx, base + "merchant/", "merchant");
   await checkTyphoonMap(ctx, base + "merchant/", "merchant");
   await checkWeatherTabs(ctx, base + "merchant/");
+  await checkMerchantR4(ctx, browser, iphone, base + "merchant/");
+  await checkUpdateBar(ctx, base + "merchant/", "merchant");
   await m.page.goto(base + "merchant/", { waitUntil: "networkidle" });
   await visitTabs(m.page, "merchant", ["compare", "weather", "market"]);
   const lsAll = await m.page.evaluate(() => Object.keys(localStorage));

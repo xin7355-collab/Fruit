@@ -110,3 +110,12 @@ test("颱風地圖：70% 機率範圍＝相鄰兩圓的凸包、方向一致（�
   assert.equal(polys.length, 2);
   for (const [ring] of polys) assert.ok(area(ring) > 0, "每塊都是逆時針（x＝經度、y＝緯度）");
 });
+
+test("version.json 跟 index.html 的 VERSION 一致、CHANGELOG 最上面是這一版（不一致就不會跳更新提醒或會一直跳）", () => {
+  for (const dir of [ROOT, path.join(ROOT, "merchant")]) {
+    const html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+    const ver = html.match(/const VERSION="(v[\d.]+)"/)[1];
+    assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "version.json"), "utf8")).v, ver, dir);
+    assert.equal(html.match(/const CHANGELOG=\[\s*\{v:"(v[\d.]+)"/)[1], ver, dir);
+  }
+});

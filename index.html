@@ -561,6 +561,10 @@
   .sheet h2{gap:0.4rem;}
   .sheet h2 .close{flex:0 0 auto;}
   :root[data-fs="l"] .mc-r1,:root[data-fs="xl"] .mc-r1{flex-wrap:wrap;row-gap:0.15rem;}
+  .updbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(0.8rem + env(safe-area-inset-bottom));z-index:80;
+    width:min(92vw,520px);border:0;border-radius:14px;padding:0.8rem 1rem;background:#2563eb;color:#fff;font-weight:800;
+    font-size:min(0.95rem,4.2vw);box-shadow:0 8px 24px rgba(0,0,0,.45);text-align:center;}
+  .updbar b{color:#fde68a;}
 </style>
 </head>
 <body>
@@ -806,11 +810,14 @@
 /* 共用演算法放在 core.js（兩支 App 同一份內容、有單元測試）：這裡直接取用，不再各寫一份 */
 const {doyOf,weekOf,median,pctile,sortedEntries,mergeSeries,toLunar}=Core;
 /* ══════ 基礎 ══════ */
-const VERSION="v1.1.4";
+const VERSION="v1.1.5";
 /* 版本更新紀錄（最新在最上面）。未來每次改版就在陣列最前面新增一筆：
    {v:版本, date:"YYYY-MM-DD", title:"一句話重點", items:[本次更新條列…]}。
    會顯示在「設定→關於 App→更新內容」。 */
 const CHANGELOG=[
+  {v:"v1.1.5", date:"2026-10-31", title:"新版提醒 🆕", items:[
+    "【新增】有新版本時，畫面下方會出現「有新版本」提示，點一下就更新，不用再關掉重開好幾次。",
+  ]},
   {v:"v1.1.4", date:"2026-10-31", title:"颱風詳情精簡 🌀", items:[
     "【調整】颱風詳情拿掉 windy 內嵌即時影像（省流量、不會卡住滑動），保留 NCDR、windy 全螢幕連結，另加中央氣象署颱風消息。",
     "【改善】颱風路徑地圖移到最上面，預報員解讀放在地圖下方。",
@@ -2457,6 +2464,28 @@ window.addEventListener("orientationchange",()=>setTimeout(setHdrH,250));
   maybeShowWhatsNew();   // 改版後第一次開啟：自動跳「更新內容」一次
   if(location.hash==="#harvest"||location.hash==="#forecast")switchTab(location.hash.slice(1));   // LINE 推播按鈕直接打開田園巡查/採收預判
 })();
+const SW_PREFIX="jingzhun-farm-";
+/* 版本更新提醒（2026-10-31 使用者要求）：頁面殼是 stale-while-revalidate，改版後第一次開常常還是舊版。
+   啟動與切回 App 時讀很小的 version.json，比現在的 VERSION 新就在畫面底部提示；點了清掉舊頁面快取再重載。
+   version.json 每次改版要跟 VERSION 一起改（tests/core.test.cjs 會比對兩者）。 */
+function verNum(v){return String(v||"").replace(/^v/,"").split(".").map(n=>+n||0);}
+function verNewer(a,b){const x=verNum(a),y=verNum(b);for(let i=0;i<Math.max(x.length,y.length);i++){if((x[i]||0)!==(y[i]||0))return (x[i]||0)>(y[i]||0);}return false;}
+let UPD_LAST=0;
+async function checkUpdate(force){
+  if(!force&&Date.now()-UPD_LAST<10*60*1000)return;UPD_LAST=Date.now();
+  try{const r=await fetch("version.json",{cache:"no-cache"});if(!r.ok)return;const j=await r.json();
+    if(j&&j.v&&verNewer(j.v,VERSION))showUpdateBar(j.v);}catch(e){}}   // 離線或抓不到：安靜略過，下次再查
+function showUpdateBar(v){if(document.getElementById("updBar"))return;
+  const b=document.createElement("button");b.id="updBar";b.type="button";b.className="updbar";
+  b.innerHTML=`🆕 有新版本 <b>${v}</b>（你現在是 ${VERSION}）· 點這裡更新`;
+  b.onclick=async()=>{b.textContent="更新中…";
+    try{for(const k of await caches.keys()){if(k.indexOf(SW_PREFIX)!==0)continue;const c=await caches.open(k);
+      await c.delete(new URL("./",location.href).href);await c.delete(new URL("index.html",location.href).href);}}catch(e){}
+    try{const reg=await navigator.serviceWorker.getRegistration();if(reg)await reg.update();}catch(e){}
+    location.reload();};
+  document.body.appendChild(b);}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkUpdate(false);});
+setTimeout(()=>checkUpdate(true),3000);
 /* PWA：註冊 Service Worker（可安裝到主畫面、離線可用）。失敗不影響網頁運作。 */
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{});});

@@ -224,7 +224,14 @@
   .vgroup .mcard{margin-bottom:0;}
   .mc-child .mc-nm{font-size:1.2rem;letter-spacing:0.5px;}
   /* 天氣分頁 */
-  .wx-h{font-size:1.2rem;font-weight:900;margin:0.3rem 0 0.9rem;}
+  .wx-h{font-size:1.2rem;font-weight:900;margin:0;}
+  .wx-hrow{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin:0.3rem 0 0.7rem;}
+  .wx-hbtns{margin-left:auto;display:flex;gap:0.4rem;}
+  .wx-btn{background:var(--panel2);border:1px solid var(--line);color:var(--paper);border-radius:999px;padding:0.4rem 0.7rem;
+    font-weight:800;font-size:min(0.85rem,3.8vw);white-space:nowrap;}
+  .wx-pick{margin:-0.2rem 0 0.7rem;} .wx-pick select{width:100%;font-size:16px;padding:0.55rem 0.7rem;border-radius:12px;
+    background:var(--panel2);border:1px solid var(--line);color:var(--paper);}
+  .wx-msg{font-size:0.85rem;color:var(--muted);background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:0.55rem 0.7rem;margin:-0.2rem 0 0.7rem;line-height:1.5;}
   .wx-foot{font-size:0.72rem;color:var(--muted);margin-top:0.9rem;line-height:1.6;}
   /* 24 小時天氣（逐時段） */
   .wx24{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:0.9rem 0 0.7rem 1rem;margin-bottom:0.8rem;}
@@ -367,7 +374,8 @@
   .wadv-h{font-weight:900;font-size:1rem;margin-bottom:0.35rem;} .wadv-h b.up{color:var(--g);} .wadv-h b.mid{color:var(--y);} .wadv-h b.dn{color:var(--r);}
   .wadv-l{font-size:0.9rem;line-height:1.55;color:var(--paper);margin:0.15rem 0;} .wadv-l b{color:var(--cool);}
   .wadv-f{font-size:0.7rem;color:var(--muted);margin-top:0.3rem;}
-  .wadv-warn{display:flex;align-items:center;gap:0.3rem;margin:0.45rem 0;padding:0.5rem 0.7rem;border-radius:10px;font-size:0.9rem;font-weight:800;border:1px solid;}
+  /* 不用 flex：文字和 <b> 會各變成一欄，大字級時「颱／風」被擠成直排 */
+  .wadv-warn{display:block;margin:0.45rem 0;padding:0.5rem 0.7rem;border-radius:10px;font-size:0.9rem;font-weight:800;border:1px solid;}
   .wadv-warn.dn{color:#ffb0a0;background:rgba(228,87,46,.14);border-color:rgba(228,87,46,.42);}
   .wadv-warn.mid{color:#ebc44e;background:rgba(242,183,5,.12);border-color:rgba(242,183,5,.36);}
   .wadv-warn.clickable{cursor:pointer;} .wadv-warn b{color:var(--paper);}
@@ -499,9 +507,15 @@ details.cmpbt p{margin:.45rem 0 0;line-height:1.55;}
   .sheet h2{gap:0.4rem;}
   .sheet h2 .close{flex:0 0 auto;}
   .cmprow .mk{flex:1 1 auto;min-width:0;}
+  .cmpsearch{position:relative;flex:1 1 100%;}
+  .cmpsearch .sg-none{padding:0.6rem 0.7rem;color:var(--muted);font-size:0.9rem;}
   :root[data-fs="l"] .cmprow,:root[data-fs="xl"] .cmprow{flex-wrap:wrap;row-gap:0.3rem;}
   :root[data-fs="l"] .mc-right,:root[data-fs="xl"] .mc-right{flex:1 1 100%;border-left:0;border-top:1px solid var(--line);
     flex-direction:row;flex-wrap:wrap;align-items:baseline;column-gap:0.7rem;row-gap:0.2rem;}
+  .updbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(0.8rem + env(safe-area-inset-bottom));z-index:80;
+    width:min(92vw,520px);border:0;border-radius:14px;padding:0.8rem 1rem;background:#2563eb;color:#fff;font-weight:800;
+    font-size:min(0.95rem,4.2vw);box-shadow:0 8px 24px rgba(0,0,0,.45);text-align:center;}
+  .updbar b{color:#fde68a;}
 </style>
 </head>
 <body>
@@ -541,7 +555,9 @@ details.cmpbt p{margin:.45rem 0 0;line-height:1.55;}
     <p class="mkt-label">比全台各市場批發價（低→高，適合進貨）</p>
     <div class="catbar" id="cmpCat"></div>
     <div class="form cmpform" style="padding:0.6rem 0.7rem">
-      <select id="cmpCrop"></select>
+      <div class="cmpsearch"><input id="cmpSearch" type="search" placeholder="🔍 打字找品項（可打俗名，如芭樂）" autocomplete="off" enterkeyhint="search">
+        <div class="cropsug" id="cmpSug" style="display:none"></div></div>
+      <select id="cmpCrop" aria-label="或從清單選品項"></select>
       <select id="cmpVar" style="display:none"></select>
       <label class="cmpfreight"><span>運費（從別的市場運回來）</span><span class="nw"><input id="cmpFreight" type="number" inputmode="decimal" min="0" step="0.5" placeholder="0"> 元/公斤</span></label>
     </div>
@@ -585,12 +601,6 @@ details.cmpbt p{margin:.45rem 0 0;line-height:1.55;}
     <div class="setblk"><h4>我的品項</h4>
       <p class="hintline" style="margin-top:0">勾選＝行情看板要顯示的品項（此市場）。</p>
       <div class="croppick" id="cropPick"></div>
-    </div>
-
-    <div class="setcat">天氣</div>
-    <div class="setblk"><h4>天氣預報地區（全國）</h4>
-      <select class="mkt" id="regionSelect"></select>
-      <p class="hintline">選你所在縣市，天氣預報／擺攤指數／颱風侵襲率依此顯示。</p>
     </div>
 
     <div class="setcat">資料備份／換手機</div>
@@ -664,11 +674,18 @@ details.cmpbt p{margin:.45rem 0 0;line-height:1.55;}
 /* 共用演算法放在 core.js（兩支 App 同一份內容、有單元測試）：這裡直接取用，不再各寫一份 */
 const {doyOf,weekOf,median,pctile,sortedEntries,mergeSeries,toLunar}=Core;
 /* ══════ 基礎 ══════ */
-const VERSION="v1.7.8";
+const VERSION="v1.7.9";
 /* 版本更新紀錄（最新在最上面）。未來每次改版就在陣列最前面新增一筆：
    {v:版本, date:"YYYY-MM-DD", title:"一句話重點", items:[本次更新條列…]}。
    會顯示在「設定→關於 App→更新內容」，改版後第一次開啟也會自動彈一次本版。 */
 const CHANGELOG=[
+  {v:"v1.7.9", date:"2026-10-31", title:"打字找品項、天氣換地區、新版提醒 🆕", items:[
+    "【調整】「水果」移到「蔬菜」前面（行情看板、比價、設定「我的品項」都一樣），預設先看水果。",
+    "【新增】比價可以直接打字找品項，俗名也行（打「芭樂」會找到番石榴）；下拉選單照樣能用。",
+    "【新增】天氣頁標題右邊有「📍 現在位置」和「✏️ 修改」，直接換天氣地區；設定裡的天氣地區拿掉了。",
+    "【新增】有新版本時，畫面下方會出現「有新版本」提示，點一下就更新。",
+    "【修正】字級「特大」時，天氣頁的颱風橫幅不會再被擠成直排。",
+  ]},
   {v:"v1.7.8", date:"2026-10-31", title:"天氣分頁：近期天氣／颱風動態 🌦", items:[
     "【改版】天氣分成「近期天氣」「颱風動態」兩個子分頁；有颱風時「颱風動態」和最上面的「天氣」分頁都會亮紅點。",
     "【改版】未來 24 小時改成左右滑動的小卡，不用一直往下捲；降雨機率 50% 以上的時段用藍框標出。",
@@ -1012,7 +1029,7 @@ const FEST=Object.fromEntries(FESTIVALS);
 // 真實天氣事件標記樣式（date -> [{type,label}]，由 loadEvents 填入）
 let WEVENTS={};
 const WEV_STYLE={typhoon:{g:"🌀",c:"#B7472A"},rain:{g:"🌧",c:"#3B7DD8"},cold:{g:"❄",c:"#57B0C9"}};
-let QDATA=[],QGEO=null,QANNO=[],TF="D",CAT="蔬菜";
+let QDATA=[],QGEO=null,QANNO=[],TF="D",CAT="水果";  // 水果排第一個，預設也選它（否則亮的是第二顆按鈕，像壞掉）
 let UNIT=S.unit,MKTMODE="list",DETAIL=null,SEARCH="",CURVAR=null,PICK=null;   // 公斤/台斤、列表/詳細、詳細頁作物、搜尋、目前品種、展開品種下拉的作物
 const TF_LABEL={D:"日",W:"週",M:"月"};
 /* ── 單位：1 台斤 = 0.6 公斤 ── */
@@ -1071,7 +1088,9 @@ function annoHTML(annos){
 
 /* ══════ 行情看板 ══════ */
 // 分類切換的顯示依「該市場實際有賣什麼」（availableCrops），葉菜市場只有蔬菜→不顯示切換
-function marketCats(){const set=new Set(availableCrops().map(cropCat));return ["蔬菜","水果"].filter(c=>set.has(c));}
+/* 水果排在蔬菜前面（2026-10-31 使用者要求：看板、比價、設定都一樣） */
+const CAT_ORDER=["水果","蔬菜"];
+function marketCats(){const set=new Set(availableCrops().map(cropCat));return CAT_ORDER.filter(c=>set.has(c));}
 function renderCatbar(){
   const bar=document.getElementById("catbar");if(!bar)return;
   const present=marketCats();
@@ -1540,7 +1559,7 @@ function weatherAdviceHTML(){
   return `<div class="wadv"><div class="wadv-h">🌦 ${cty} · 擺攤指數 <b class="${cls}">${idx}</b></div>
     ${weatherWarnHTML()}
     <div class="wadv-l">${rainLine}</div><div class="wadv-l">${note}</div>
-    <div class="wadv-f">中央氣象署今明預報 · 詳細見下方逐時段（可在 ⚙️ 換地區）</div></div>`;
+    <div class="wadv-f">中央氣象署今明預報 · 詳細見下方逐時段（可在天氣頁上方換地區）</div></div>`;
 }
 /* 颱風/豪雨警戒卡（商人看板頁用；置於天氣預報之上）。平安時回傳 noteworthy=false 讓看板隱藏不佔版面。 */
 function typhoonAlertInfo(){
@@ -1582,10 +1601,6 @@ function renderSettings(){
   applyFont();
   const ms=document.getElementById("mktSelect");ms.innerHTML="";
   marketNames().forEach(m=>{const o=document.createElement("option");o.value=m;o.textContent=m;if(m===MARKET)o.selected=true;ms.appendChild(o);});
-  const rs=document.getElementById("regionSelect");if(rs){rs.innerHTML="";const cur=normCounty(S.region);
-    const list=(FORECAST&&FORECAST.counties&&Object.keys(FORECAST.counties).length)?
-      COUNTY_ORDER.filter(c=>FORECAST.counties[c]):COUNTY_ORDER;
-    (list.length?list:COUNTY_ORDER).forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;if(c===cur)o.selected=true;rs.appendChild(o);});}
   renderCropPick();
 }
 /* 我的品項：勾選表（勾＝顯示；分蔬菜/水果；省空間、可增可刪） */
@@ -1598,8 +1613,8 @@ function renderCropPick(){
   bar.innerHTML=`<span class="pickcount">已選 <b>${watch.length}</b> / ${av.length} 項</span>`;
   box.appendChild(bar);
   const setW=w=>{S.setWatch(MARKET,w);renderCropPick();MKTMODE="list";DETAIL=null;renderBoard();};
-  // 蔬菜/水果 各自分區，各有「全選 / 取消全選」
-  [["蔬菜","🥬"],["水果","🍉"]].forEach(([cat,emoji])=>{
+  // 水果/蔬菜 各自分區（水果在前），各有「全選 / 取消全選」
+  [["水果","🍉"],["蔬菜","🥬"]].forEach(([cat,emoji])=>{
     let items=av.filter(c=>cropCat(c)===cat);if(!items.length)return;
     // 依細部類型排序（同型相鄰）、型內依名稱，讓設定裡的品項依類型分群呈現
     items=items.slice().sort((a,b)=>{const ta=cropType(a),tb=cropType(b);return ta.order-tb.order||a.localeCompare(b,"zh-Hant");});
@@ -1642,8 +1657,6 @@ async function switchMarket(mk){
   renderBoard();renderSettings();   // renderBoard 會重建看板下拉、renderSettings 重建設定下拉 → 兩邊同步
 }
 document.getElementById("mktSelect").addEventListener("change",e=>switchMarket(e.target.value));
-document.getElementById("regionSelect").addEventListener("change",e=>{S.region=e.target.value;
-  renderBoard();renderWeather();});   // 換地區→看板＋天氣分頁(擺攤指數/颱風侵襲率/逐時)同步更新
 /* 搜尋下拉建議：輸入一字就提示；以「開頭符合」優先（第一個字為主），其次為包含 */
 function renderSug(q){
   const box=document.getElementById("cropSug");if(!box)return;
@@ -1789,6 +1802,23 @@ function wx24HTML(){
   return `<div class="wx24"><h3 class="wx24-h">${head}<span class="wx24-hint">左右滑動 ›</span></h3>
     <div class="wxs" tabindex="0" aria-label="未來天氣，左右滑動看更多">${cards.join("")}</div></div>`;
 }
+/* 天氣地區：2026-10-31 使用者要求從設定搬到天氣頁標題旁——「📍 現在位置」用手機定位找最近的縣市，「✏️ 修改」手動選。
+   座標只在手機上換算成縣市，不存、不傳出去（只存縣市名 jb_region）。 */
+let WX_PICK=false,WX_MSG="";
+function regionList(){const C=(FORECAST&&FORECAST.counties)||{};const l=COUNTY_ORDER.filter(c=>C[c]);return l.length?l:COUNTY_ORDER;}
+function setRegion(c,msg){S.region=c;WX_PICK=false;WX_MSG=msg;renderBoard();renderWeather();}
+function nearestCounty(lat,lng){let best=null,bd=1e9;
+  for(const [c,la,lo] of COUNTY_LL){const d=haversineKm(lat,lng,la,lo);if(d<bd){bd=d;best=c;}}return {c:best,d:bd};}
+function locateRegion(){
+  if(!navigator.geolocation){WX_MSG="這個瀏覽器不支援定位，請按「✏️ 修改」手動選。";renderWeather();return;}
+  WX_MSG="定位中…";renderWeather();
+  navigator.geolocation.getCurrentPosition(pos=>{const n=nearestCounty(pos.coords.latitude,pos.coords.longitude);
+      if(!n.c||n.d>150){WX_MSG="你的位置不在台灣附近，請按「✏️ 修改」手動選。";renderWeather();return;}
+      setRegion(n.c,`📍 已依你的位置改成 ${n.c}（縣市交界附近可能判斷錯，可再按「修改」）`);},
+    err=>{WX_MSG=err.code===1
+        ?"沒有定位權限：請到 iPhone「設定 → 隱私權與安全性 → 定位服務 → Safari 網站」改成「使用 App 期間」，或按「✏️ 修改」手動選。"
+        :"定位失敗（可能訊號不好），請再按一次或按「✏️ 修改」手動選。";renderWeather();},
+    {enableHighAccuracy:false,timeout:12000,maximumAge:10*60*1000});}
 function renderWeather(){
   const wrap=document.getElementById("weatherWrap");if(!wrap)return;
   TyMap.destroy();
@@ -1806,18 +1836,26 @@ function renderWeather(){
     else{const a=typhoonAlertInfo();
       body=`<div class="${a.cls}" id="wxAlert">${a.html}</div><div class="empty">目前無天氣預報資料，稍後排程更新後即顯示。</div>`;}
   }
-  wrap.innerHTML=`<h2 class="wx-h">🌦 ${cty} 天氣</h2>`+tabs+body
-    +`<p class="wx-foot">天氣／颱風資料採中央氣象署開放資料。可在右上 ⚙️ 更換「天氣預報地區」。</p>`;
+  const opts=regionList().map(c=>`<option value="${c}"${c===cty?" selected":""}>${c}</option>`).join("");
+  const head=`<div class="wx-hrow"><h2 class="wx-h">🌦 ${cty} 天氣</h2><div class="wx-hbtns">
+      <button type="button" id="wxLoc" class="wx-btn">📍 現在位置</button><button type="button" id="wxEdit" class="wx-btn">✏️ 修改</button></div></div>
+    <div class="wx-pick" id="wxPick"${WX_PICK?"":" hidden"}><select id="wxRegion" aria-label="選擇天氣地區">${opts}</select></div>
+    <div class="wx-msg" id="wxMsg"${WX_MSG?"":" hidden"}>${WX_MSG}</div>`;
+  wrap.innerHTML=head+tabs+body
+    +`<p class="wx-foot">天氣／颱風資料採中央氣象署開放資料。地區可用上方「📍 現在位置」或「✏️ 修改」更換。</p>`;
   wrap.querySelectorAll(".wxtabs button").forEach(b=>b.onclick=()=>{WXTAB=b.dataset.w;renderWeather();});
+  document.getElementById("wxEdit").onclick=()=>{WX_PICK=!WX_PICK;WX_MSG="";renderWeather();};
+  document.getElementById("wxRegion").onchange=e=>setRegion(e.target.value,"");
+  document.getElementById("wxLoc").onclick=locateRegion;
   const wn=document.getElementById("wxWarn");if(wn)wn.onclick=goTyphoon;   // 點警戒橫幅→切到「颱風動態」
   const al=document.getElementById("wxAlert");if(al&&typhoonAlertInfo().clickable)al.onclick=goTyphoon;
   if(WXTAB==="ty"&&on)requestAnimationFrame(()=>TyMap.render(document.getElementById("tyMap"),WEATHER,tyRef()));
   updateTyDot();
 }
-let CMPCAT="蔬菜";
+let CMPCAT="水果";
 function renderCmpCat(){const bar=document.getElementById("cmpCat");if(!bar)return;
-  const all=Object.keys(cropMap());const present=["蔬菜","水果"].filter(cat=>all.some(c=>cropCat(c)===cat));
-  if(!present.includes(CMPCAT))CMPCAT=present[0]||"蔬菜";
+  const all=Object.keys(cropMap());const present=CAT_ORDER.filter(cat=>all.some(c=>cropCat(c)===cat));
+  if(!present.includes(CMPCAT))CMPCAT=present[0]||"水果";
   bar.innerHTML=present.map(c=>`<button data-c="${c}" class="${c===CMPCAT?'on':''}">${c==='蔬菜'?'🥬 蔬菜':'🍉 水果'}</button>`).join("");
   bar.querySelectorAll("button").forEach(b=>b.onclick=()=>{CMPCAT=b.dataset.c;renderCmpCat();populateCompareCrops();renderCompare();});}
 function populateCompareCrops(){const sel=document.getElementById("cmpCrop");if(!sel)return;
@@ -1904,6 +1942,21 @@ async function openCompareRow(mk,crop,variety){
   openDetail(crop,variety||null);
 }
 document.getElementById("cmpCrop").addEventListener("change",()=>{populateCmpVar();renderCompare();});
+/* 比價打字搜尋（2026-10-31 使用者要求：除了下拉選單也要能打字）：跨蔬菜水果、認得俗名；點一項就切過去比價 */
+function cmpPick(c){const inp=document.getElementById("cmpSearch"),sug=document.getElementById("cmpSug");
+  CMPCAT=cropCat(c)||CMPCAT;renderCmpCat();populateCompareCrops();
+  const sel=document.getElementById("cmpCrop");sel.value=c;sel.dataset.crop="";populateCmpVar();renderCompare();
+  inp.value="";inp.blur();sug.style.display="none";sug.innerHTML="";}
+function cmpSugRender(){const inp=document.getElementById("cmpSearch"),sug=document.getElementById("cmpSug");
+  const q=inp.value.trim().toLowerCase();if(!q){sug.style.display="none";sug.innerHTML="";return;}
+  const all=Object.keys(cropMap());
+  const hits=[...all.filter(c=>Core.nameStarts(c,q)).sort(),...all.filter(c=>!Core.nameStarts(c,q)&&Core.nameHit(c,q)!==null).sort()].slice(0,8);
+  if(!hits.length){sug.innerHTML=`<div class="sg-none">找不到「${inp.value.trim()}」</div>`;sug.style.display="";return;}
+  sug.innerHTML=hits.map(c=>`<button type="button" data-c="${c}">${nameHTML(c)}<span class="sg-cat">${cropCat(c)}</span></button>`).join("");
+  sug.style.display="";sug.querySelectorAll("button").forEach(b=>b.onclick=()=>cmpPick(b.dataset.c));}
+{const inp=document.getElementById("cmpSearch");inp.addEventListener("input",cmpSugRender);
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){const f=document.querySelector("#cmpSug button");if(f){e.preventDefault();cmpPick(f.dataset.c);}}});
+  document.addEventListener("click",e=>{if(!e.target.closest(".cmpsearch")){const sug=document.getElementById("cmpSug");sug.style.display="none";}});}
 document.getElementById("cmpVar").addEventListener("change",renderCompare);
 {const fi=document.getElementById("cmpFreight");if(fi){const v=freightPerKg();if(v)fi.value=v;
   let ft=null;fi.addEventListener("input",()=>{try{const s=fi.value.trim();if(s==="")localStorage.removeItem("jb_freight");
@@ -1971,6 +2024,28 @@ window.addEventListener("orientationchange",()=>setTimeout(syncTopbar,200));
   syncTopbar();  // 頂列高度 → 看板列黏在其下方
   maybeShowWhatsNew();   // 改版後第一次開啟：自動跳「更新內容」一次
 })();
+const SW_PREFIX="jingzhun-buy-";
+/* 版本更新提醒（2026-10-31 使用者要求）：頁面殼是 stale-while-revalidate，改版後第一次開常常還是舊版。
+   啟動與切回 App 時讀很小的 version.json，比現在的 VERSION 新就在畫面底部提示；點了清掉舊頁面快取再重載。
+   version.json 每次改版要跟 VERSION 一起改（tests/core.test.cjs 會比對兩者）。 */
+function verNum(v){return String(v||"").replace(/^v/,"").split(".").map(n=>+n||0);}
+function verNewer(a,b){const x=verNum(a),y=verNum(b);for(let i=0;i<Math.max(x.length,y.length);i++){if((x[i]||0)!==(y[i]||0))return (x[i]||0)>(y[i]||0);}return false;}
+let UPD_LAST=0;
+async function checkUpdate(force){
+  if(!force&&Date.now()-UPD_LAST<10*60*1000)return;UPD_LAST=Date.now();
+  try{const r=await fetch("version.json",{cache:"no-cache"});if(!r.ok)return;const j=await r.json();
+    if(j&&j.v&&verNewer(j.v,VERSION))showUpdateBar(j.v);}catch(e){}}   // 離線或抓不到：安靜略過，下次再查
+function showUpdateBar(v){if(document.getElementById("updBar"))return;
+  const b=document.createElement("button");b.id="updBar";b.type="button";b.className="updbar";
+  b.innerHTML=`🆕 有新版本 <b>${v}</b>（你現在是 ${VERSION}）· 點這裡更新`;
+  b.onclick=async()=>{b.textContent="更新中…";
+    try{for(const k of await caches.keys()){if(k.indexOf(SW_PREFIX)!==0)continue;const c=await caches.open(k);
+      await c.delete(new URL("./",location.href).href);await c.delete(new URL("index.html",location.href).href);}}catch(e){}
+    try{const reg=await navigator.serviceWorker.getRegistration();if(reg)await reg.update();}catch(e){}
+    location.reload();};
+  document.body.appendChild(b);}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkUpdate(false);});
+setTimeout(()=>checkUpdate(true),3000);
 /* PWA：註冊 Service Worker（可安裝到主畫面、離線可用）。失敗不影響網頁運作。 */
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{});});
