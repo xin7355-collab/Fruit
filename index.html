@@ -776,11 +776,14 @@
 /* 共用演算法放在 core.js（兩支 App 同一份內容、有單元測試）：這裡直接取用，不再各寫一份 */
 const {doyOf,weekOf,median,pctile,sortedEntries,mergeSeries,toLunar}=Core;
 /* ══════ 基礎 ══════ */
-const VERSION="v1.0.9";
+const VERSION="v1.1.0";
 /* 版本更新紀錄（最新在最上面）。未來每次改版就在陣列最前面新增一筆：
    {v:版本, date:"YYYY-MM-DD", title:"一句話重點", items:[本次更新條列…]}。
    會顯示在「設定→關於 App→更新內容」。 */
 const CHANGELOG=[
+  {v:"v1.1.0", date:"2026-10-31", title:"天氣颱風資料過期就不顯示 🌀", items:[
+    "【修正】天氣預報超過 2 天、颱風警報超過 1 天沒更新就不顯示，不再把舊資料當成今天（曾出現 8 月的颱風一直掛著）。",
+  ]},
   {v:"v1.0.9", date:"2026-10-31", title:"俗名搜尋、看板排序、去年同期、開價檢查 🔍", items:[
     "【新增】搜尋認得俗名：打「高麗菜、空心菜、芭樂、地瓜葉、大白菜…」直接找到批發名（甘藍、蕹菜、番石榴…）。",
     "【新增】看板可排序：最便宜／最貴（對比近 90 日）、較上週漲最多／跌最多、成交量最大，會記住你的選擇。",
@@ -1013,10 +1016,18 @@ function ensureVariants(mk){
   return VARLOAD[mk];}
 async function loadWeather(){
   try{const r=await fetch(`${resolveGhBase()}/typhoon_status.json`,{cache:"no-cache"});if(!r.ok)throw 0;
-    const j=await r.json();return (j&&typeof j==="object")?j:{active:false};}catch(e){return {active:false};}}
+    const j=await r.json();if(!(j&&typeof j==="object"))return {active:false};
+    /* 颱風狀態超過 24 小時沒更新（排程停擺／未設金鑰）就不再顯示警報：曾發生 8 月的「颱風接近中」掛到 10 月 */
+    const up=Date.parse(String(j.updated||"").replace(" ","T")+"+08:00");
+    if(j.active&&(!(up>0)||Date.now()-up>24*3600*1000))return Object.assign({},j,{active:false,stale:j.updated||"未知"});
+    return j;}catch(e){return {active:false};}}
 async function loadForecast(){
   try{const r=await fetch(`${resolveGhBase()}/weather_forecast.json`,{cache:"no-cache"});if(!r.ok)throw 0;
-    const j=await r.json();return (j&&j.counties&&typeof j.counties==="object")?j:{counties:{}};}catch(e){return {counties:{}};}}
+    const j=await r.json();if(!(j&&j.counties&&typeof j.counties==="object"))return {counties:{}};
+    /* 預報超過 48 小時沒更新（例如未設 CWA_API_KEY、排程停擺）就不顯示：寧可空白，也不把舊預報當「今天」 */
+    const up=Date.parse(String(j.updated||"").replace(" ","T")+"+08:00");
+    if(!(up>0)||Date.now()-up>48*3600*1000)return {counties:{},stale:j.updated||"未知"};
+    return j;}catch(e){return {counties:{}};}}
 async function loadYield(){
   // 各縣市每公頃單產（農業部生產概況，後端排程產出）；抓不到就 null，前端退回內建估算值
   try{const r=await fetch(`${resolveGhBase()}/yield_index.json`,{cache:"no-cache"});if(!r.ok)throw 0;
