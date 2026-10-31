@@ -1,0 +1,82 @@
+{
+  "_comment": "田區登記表範例。實際部署時，每位農民/每塊田一筆。座標用於查 DEM 海拔與淹水潛勢；chemicals 逐藥記錄施藥日與該藥登記 PHI（安全採收期，天）。PHI 必須以『植物保護資訊系統／農藥資訊服務網』實查登記值，勿臆填。",
+  "region": "雲林縣二崙鄉／西螺鎮",
+  "fields": [
+    {
+      "field_id": "YL-A12",
+      "owner_id": "farmer_0231",
+      "geo": { "lat": 23.771, "lng": 120.413 },
+      "elevation_m": 3.5,
+      "flood_potential_level": 4,
+      "area_ha": 0.6,
+      "crop": "青江菜",
+      "planting_date": "2026-06-15",
+      "crew_size": 4,
+      "labor_h_per_ha": 60,
+      "chemicals": [
+        { "name": "陶斯松", "phi_days": 8, "spray_date": "2026-07-05" },
+        { "name": "億力",   "phi_days": 3, "spray_date": "2026-07-02" }
+      ]
+    },
+    {
+      "field_id": "YL-C03",
+      "owner_id": "farmer_0231",
+      "geo": { "lat": 23.802, "lng": 120.461 },
+      "elevation_m": 8.0,
+      "flood_potential_level": 3,
+      "area_ha": 1.2,
+      "crop": "芥藍菜",
+      "planting_date": "2026-05-06",
+      "crew_size": 4,
+      "labor_h_per_ha": 70,
+      "chemicals": [
+        { "name": "賜諾殺", "phi_days": 3, "spray_date": "2026-06-28" }
+      ]
+    },
+    {
+      "field_id": "YL-B07",
+      "owner_id": "farmer_0448",
+      "geo": { "lat": 23.788, "lng": 120.438 },
+      "elevation_m": 6.0,
+      "flood_potential_level": 3,
+      "area_ha": 0.4,
+      "crop": "小白菜",
+      "planting_date": "2026-06-12",
+      "crew_size": 3,
+      "labor_h_per_ha": 55,
+      "chemicals": [
+        { "name": "阿巴汀", "phi_days": 6, "spray_date": "2026-06-30" }
+      ]
+    },
+    {
+      "field_id": "YL-D21",
+      "owner_id": "farmer_0448",
+      "geo": { "lat": 23.795, "lng": 120.449 },
+      "elevation_m": 9.5,
+      "flood_potential_level": 2,
+      "area_ha": 0.5,
+      "crop": "菠菜",
+      "planting_date": "2026-06-24",
+      "crew_size": 3,
+      "labor_h_per_ha": 55,
+      "chemicals": [
+        { "name": "免賴得", "phi_days": 12, "spray_date": "2026-07-01" }
+      ]
+    },
+    {
+      "field_id": "YL-E09",
+      "owner_id": "farmer_0512",
+      "geo": { "lat": 23.760, "lng": 120.402 },
+      "elevation_m": 14.0,
+      "flood_potential_level": 1,
+      "area_ha": 0.7,
+      "crop": "青江菜",
+      "planting_date": "2026-06-20",
+      "crew_size": 5,
+      "labor_h_per_ha": 60,
+      "chemicals": [
+        { "name": "賜諾殺", "phi_days": 3, "spray_date": "2026-06-25" }
+      ]
+    }
+  ]
+}

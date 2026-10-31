@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+
+# 真實田區登記表可能含農民個資 → 不入庫（保留 data/fields.example.json 作範例）
+data/fields.json
+
+# 本機測試輸出
+/adv_test.json
+
+# 通知去重狀態（workflow 用 actions/cache 保存，不入庫）
+notify_state.json

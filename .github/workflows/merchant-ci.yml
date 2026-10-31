@@ -1,0 +1,47 @@
+name: "精準進貨｜CI"
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['merchant/**', '.github/workflows/merchant-ci.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: merchant
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安裝相依
+        run: pip install -r scripts/requirements.txt
+
+      - name: Python 語法檢查
+        run: python -m py_compile scripts/*.py
+
+      - name: fetch_cwa 無金鑰安全狀態
+        run: |
+          python3 scripts/fetch_cwa.py
+          python3 - <<'PY'
+          import json
+          s = json.load(open('typhoon_status.json'))
+          assert s['active'] is False, '無金鑰時應寫出 active=false 安全狀態'
+          print('fetch_cwa 安全狀態 OK')
+          PY
+
+      - name: 前端關鍵元素檢查
+        run: |
+          for id in 'id="view-market"' 'id="view-compare"' 'loadIndex' 'loadWeather' 'loadForecast'; do
+            grep -q "$id" index.html || { echo "index.html 缺少：$id"; exit 1; }
+          done
+          echo "index.html 關鍵元素 OK"

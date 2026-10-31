@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore: ['merchant/**', '.github/workflows/merchant-*.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安裝相依
+        run: pip install -r scripts/requirements.txt
+
+      - name: Python 語法檢查
+        run: python -m py_compile scripts/*.py
+
+      - name: 決策模型 demo 冒煙測試
+        run: |
+          python3 scripts/build_advisory.py --fields data/fields.example.json --demo-typhoon --out /tmp/adv.json
+          python3 - <<'PY'
+          import json
+          d = json.load(open('/tmp/adv.json'))
+          assert d['fields'], '無田區輸出'
+          assert d['typhoon']['active'] is True, 'demo 颱風應為 active'
+          assert d.get('schedule') and d['schedule']['items'], 'v4 排程缺失'
+          assert any(f.get('ev') for f in d['fields']), 'v3 EV 缺失'
+          print(f"advisory OK：{len(d['fields'])} 田、排程 {len(d['schedule']['items'])} 項")
+          PY
+
+      - name: 通知模組 dry-run（未設管道應只印訊息、exit 0）
+        run: python3 scripts/notify.py --advisory /tmp/adv.json --state /tmp/nstate.json
+
+      - name: fetch_cwa 無金鑰安全狀態
+        run: |
+          python3 scripts/fetch_cwa.py
+          python3 - <<'PY'
+          import json
+          s = json.load(open('typhoon_status.json'))
+          assert s['active'] is False, '無金鑰時應寫出 active=false 安全狀態'
+          print('fetch_cwa 安全狀態 OK')
+          PY
+
+      - name: 前端關鍵元素檢查
+        run: |
+          for id in 'id="view-market"' 'id="view-harvest"' 'id="view-forecast"' 'loadIndex' 'loadWeather'; do
+            grep -q "$id" index.html || { echo "index.html 缺少：$id"; exit 1; }
+          done
+          echo "index.html 關鍵元素 OK"

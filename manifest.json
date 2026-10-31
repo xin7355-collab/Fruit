@@ -1,0 +1,19 @@
+{
+  "name": "精準務農",
+  "short_name": "精準務農",
+  "description": "全台蔬果行情看板＋颱風搶收預判，給蔬果農的精準搶收決策工具",
+  "lang": "zh-Hant",
+  "dir": "ltr",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#12160E",
+  "theme_color": "#12160E",
+  "categories": ["weather", "productivity", "utilities"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

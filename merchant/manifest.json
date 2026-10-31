@@ -1,0 +1,19 @@
+{
+  "name": "精準進貨",
+  "short_name": "精準進貨",
+  "description": "全台蔬果批發行情＋跨市場比價，給商人找最便宜的市場進貨",
+  "lang": "zh-Hant",
+  "dir": "ltr",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#1C130F",
+  "theme_color": "#1C130F",
+  "categories": ["weather", "productivity", "utilities"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

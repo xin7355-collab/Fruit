@@ -1,0 +1,66 @@
+name: "精準進貨｜更新天氣與颱風資料"
+
+# 只跑「天氣/颱風」——輕量、每 30 分鐘一次（颱風期間可 workflow_dispatch 加密集）。
+# 批發行情因需抓 2 年歷史、較慢，已拆到 update-prices.yml 每日少量觸發，避免拖慢天氣更新。
+on:
+  schedule:
+    - cron: '15,45 * * * *'   # 與精準務農(*/30)錯開，避免同時 push/同時打 CWA
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: merchant-update-data
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: merchant
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      # 明確操作 main（GitHub Pages 服務的分支），不受預設分支設定影響
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安裝相依
+        run: pip install -r scripts/requirements.txt
+
+      - name: 抓取 CWA 天氣 / 颱風（無金鑰則寫出 active=false 安全狀態）
+        env:
+          CWA_API_KEY: ${{ secrets.CWA_API_KEY }}
+        run: python3 scripts/fetch_cwa.py
+
+      - name: 守門：天氣預報抓成空（無金鑰/API 失敗）就不覆蓋既有好資料
+        run: |
+          python3 -c "import json,sys; sys.exit(0 if json.load(open('weather_forecast.json')).get('counties') else 1)" \
+            || { echo '天氣預報為空（可能未設 CWA_API_KEY），還原上次好資料、不覆蓋。'; git checkout -- weather_forecast.json; }
+
+      - name: 提交更新的 JSON（供前端 index.html 讀取）
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add typhoon_status.json cwa_debug.json weather_events.json weather_forecast.json
+          if git diff --staged --quiet; then
+            echo "資料無變更，略過提交。"
+          else
+            git commit -m "chore(data): 更新天氣與颱風 [skip ci]"
+            # push 前 rebase 重試，避免與其他部署/排程競爭 main 造成非快進被拒
+            ok=0
+            for i in 1 2 3 4 5; do
+              if git push origin HEAD:main; then ok=1; break; fi
+              echo "push 被拒，rebase 後重試（第 $i 次）"
+              git fetch origin main
+              git rebase origin/main || git rebase --abort
+              sleep $((i * 3))
+            done
+            [ "$ok" = 1 ] || { echo "::error::push 連續失敗"; exit 1; }
+          fi

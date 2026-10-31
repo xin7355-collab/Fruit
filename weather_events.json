@@ -1,0 +1,87 @@
+[
+ {
+  "date": "2026-07-09",
+  "type": "typhoon",
+  "label": "巴威"
+ },
+ {
+  "date": "2026-07-10",
+  "type": "typhoon",
+  "label": "巴威"
+ },
+ {
+  "date": "2026-07-11",
+  "type": "rain",
+  "label": "豪雨 552mm"
+ },
+ {
+  "date": "2026-07-11",
+  "type": "typhoon",
+  "label": "巴威"
+ },
+ {
+  "date": "2026-07-12",
+  "type": "rain",
+  "label": "大雨 84mm"
+ },
+ {
+  "date": "2026-07-13",
+  "type": "rain",
+  "label": "大雨 198mm"
+ },
+ {
+  "date": "2026-07-14",
+  "type": "rain",
+  "label": "豪雨 200mm"
+ },
+ {
+  "date": "2026-07-18",
+  "type": "rain",
+  "label": "大雨 92mm"
+ },
+ {
+  "date": "2026-07-19",
+  "type": "rain",
+  "label": "大雨 92mm"
+ },
+ {
+  "date": "2026-07-22",
+  "type": "typhoon",
+  "label": "颱風"
+ },
+ {
+  "date": "2026-07-23",
+  "type": "typhoon",
+  "label": "颱風"
+ },
+ {
+  "date": "2026-07-24",
+  "type": "typhoon",
+  "label": "紅霞"
+ },
+ {
+  "date": "2026-08-04",
+  "type": "typhoon",
+  "label": "白海豚"
+ },
+ {
+  "date": "2026-08-05",
+  "type": "typhoon",
+  "label": "白海豚"
+ },
+ {
+  "date": "2026-08-06",
+  "type": "typhoon",
+  "label": "白海豚"
+ },
+ {
+  "date": "2026-08-07",
+  "type": "typhoon",
+  "label": "白海豚"
+ },
+ {
+  "date": "2026-08-08",
+  "type": "typhoon",
+  "label": "白海豚"
+ }
+]

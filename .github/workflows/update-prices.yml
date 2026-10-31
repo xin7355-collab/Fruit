@@ -1,0 +1,60 @@
+name: 更新全台批發行情
+
+# 批發行情每交易日只公布一次（早上），且需抓 2 年歷史較慢（~15 分），
+# 故與天氣更新拆開：每日固定幾個時段觸發即可，不拖慢 update-data 的天氣/颱風更新。
+# 需要即時重抓時可用 workflow_dispatch 手動觸發。
+on:
+  schedule:
+    - cron: '0 1 * * *'    # 09:00 台灣（早盤後）
+    - cron: '0 6 * * *'    # 14:00 台灣（補抓晚盤/漏抓）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-prices
+  cancel-in-progress: false
+
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    steps:
+      # 操作 main（GitHub Pages 服務的分支）
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安裝相依
+        run: pip install -r scripts/requirements.txt
+
+      - name: 抓取全台批發行情（農業部公開資料，免金鑰；近 2 年）
+        run: python3 scripts/fetch_prices.py --days 730 || echo "行情抓取失敗，保留既有資料，前端仍可讀舊值/退回示範"
+
+      - name: 抓取各縣市每公頃單產（農業部生產概況，免金鑰；年更新）
+        run: python3 scripts/fetch_yield.py || echo "單產抓取失敗，保留既有 yield_index.json，前端退回內建估算值"
+
+      - name: 提交更新的行情 JSON（供前端 index.html 讀取）
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prices_index.json prices yield_index.json yield_debug.json
+          if git diff --staged --quiet; then
+            echo "行情無變更，略過提交。"
+          else
+            git commit -m "chore(data): 更新全台批發行情 [skip ci]"
+            # push 前 rebase 重試，避免與 update-data / 部署競爭 main 造成非快進被拒
+            ok=0
+            for i in 1 2 3 4 5; do
+              if git push origin HEAD:main; then ok=1; break; fi
+              echo "push 被拒，rebase 後重試（第 $i 次）"
+              git fetch origin main
+              git rebase origin/main || git rebase --abort
+              sleep $((i * 3))
+            done
+            [ "$ok" = 1 ] || { echo "::error::push 連續失敗"; exit 1; }
+          fi
