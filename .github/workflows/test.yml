@@ -8,6 +8,8 @@ on:
     branches: [main]
     paths:
       - 'index.html'
+      - 'core.js'
+      - 'merchant/core.js'
       - 'sw.js'
       - 'merchant/index.html'
       - 'merchant/sw.js'
@@ -43,7 +45,7 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - name: 安裝固定版本的相依
         run: pip install -r requirements-dev.txt
-      - name: 執行 pytest（不連網，兩支 App 都測）
+      - name: 執行 pytest（不連網，兩支 App 都測；含 JS/Python 採收預判一致性）
         run: python -m pytest -q tests/
 
   e2e:
@@ -62,6 +64,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: 安裝 Chromium
         run: npx playwright install --with-deps chromium
+      - name: core.js 單元測試（節日、農曆、採收預判、俗名、開價檢查）
+        run: node --test tests/core.test.cjs
       - name: 跑兩支 App（iPhone 13 尺寸）
         run: node tests/e2e/smoke.cjs
       - name: 上傳截圖（失敗時方便看哪裡壞）
