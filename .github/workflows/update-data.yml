@@ -4,7 +4,7 @@ name: 更新天氣與搶收預判資料
 # 批發行情因需抓 2 年歷史、較慢，已拆到 update-prices.yml 每日少量觸發，避免拖慢天氣更新。
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '3,33 * * * *'   # 每 30 分；避開整點/半點（GitHub 尖峰時段排程容易延遲或被丟掉）
   workflow_dispatch:
 
 permissions:

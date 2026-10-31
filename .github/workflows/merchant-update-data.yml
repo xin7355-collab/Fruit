@@ -4,7 +4,7 @@ name: "精準進貨｜更新天氣與颱風資料"
 # 批發行情因需抓 2 年歷史、較慢，已拆到 update-prices.yml 每日少量觸發，避免拖慢天氣更新。
 on:
   schedule:
-    - cron: '15,45 * * * *'   # 與精準務農(*/30)錯開，避免同時 push/同時打 CWA
+    - cron: '15,45 * * * *'   # 與精準務農（3,33 分）錯開，避免同時 push/同時打 CWA
   workflow_dispatch:
 
 permissions:
