@@ -247,9 +247,11 @@ async function checkTyphoonMap(ctx, url, name) {
   const pre = name === "merchant" ? "jb_" : "vs_", county = name === "merchant" ? "台中" : "雲林";
   const p = await ctx.newPage(); const errs = [];
   p.on("pageerror", (e) => errs.push(e.message));
-  p.on("console", (m) => { if (m.type() === "error" && !/tile\.openstreetmap|ERR_FAILED|net::/.test(m.text())) errs.push(m.text()); });
+  // 只算我們自己網頁的錯誤：windy 內嵌頁（第三方）在 CI 有網路時會印它自己的錯（定位權限被擋、EventSource），不是 App 的問題
+  p.on("console", (m) => { const loc = (m.location() || {}).url || "";
+    if (m.type() === "error" && !/^https?:\/\/(?!127\.0\.0\.1)/.test(loc) && !/tile\.openstreetmap|windy|ERR_FAILED|net::/.test(m.text())) errs.push(m.text()); });
   await p.route("**/typhoon_status.json", (r) => r.fulfill({ path: path.join(__dirname, "fixtures", "typhoon_status_infa.json"), contentType: "application/json" }));
-  await p.route(/tile\.openstreetmap\.org/, (r) => r.abort());
+  await p.route(/tile\.openstreetmap\.org|windy\.com/, (r) => r.abort());   // 底圖磚、windy 都是外部服務：測試不依賴它們
   await p.addInitScript(([pre, c]) => { try { localStorage.setItem(pre + "region", c); } catch (e) {} }, [pre, county + (county === "台中" ? "市" : "縣")]);
   await p.goto(url, { waitUntil: "networkidle" });
   if (await p.locator("#clModal.on").count()) await p.click("#closeCl");
