@@ -22,6 +22,9 @@
     → 不覆蓋、沿用上次 index 條目；全部失敗 → 不寫檔 exit 1；連續 3 市場失敗熔斷。`notify.py` 刻意不重試（避免重複推播）。
   - 前端 JSON 一律 `cache:"no-cache"`（ETag 304，不要改回 no-store：每次開 App 會重抓 3～5MB）。
   - 精準進貨比價只採計最新成交日前 `CMP_FRESH_DAYS`(4) 天內的報價，舊價排最後標「舊價」。
+- **2026-10-31 起共用**：`merchant/core.js`（＝根目錄 core.js，前端共用演算法）、`merchant/scripts/price_core.py`（＝scripts/price_core.py，
+  行情三檔格式 NN.json／NN_v.json／NN_recent.json＋看板摘要 sum、增量抓取）。兩份內容須一致（測試會比對），改一邊就複製到另一邊。
+  專案工作守則（授權、隱私、做事方式）以根目錄 `CLAUDE.md` 為準。
 - **測試（改程式後必跑）**：`pip install -r requirements-dev.txt && python -m pytest -q tests/`（離線、兩支 App 都測）；
   `node tests/e2e/smoke.cjs`（iPhone 13 尺寸冒煙，截圖在 test-results/）。CI：`.github/workflows/test.yml`。
 - **技能**：`.claude/skills/` 由 skl 的 app-bootstrap 安裝（清單見 `.claude/skills/.skl-vendor.json`）；
