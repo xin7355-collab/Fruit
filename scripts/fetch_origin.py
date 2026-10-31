@@ -105,12 +105,21 @@ def main(argv=None, getter=None, sleep=None):
     kw = {"getter": getter, **({"sleep": sleep} if sleep else {})}   # 測試可注入，不真的等重試
     fresh = {}
     for params in ({"UnitId": UNIT_ID, "IsTransData": 1, "ORGNAME": AVG_NAME}, {"UnitId": UNIT_ID, "IsTransData": 1}):
+        label = f"產地價格 {params.get('ORGNAME', '全部')}"
         try:
-            rows = get_json(API, params=params, timeout=60, label=f"產地價格 {params.get('ORGNAME', '全部')}", **kw)
-            for name, s in parse(rows if isinstance(rows, list) else []).items():
+            rows = get_json(API, params=params, timeout=60, label=label, **kw)
+            rows = rows if isinstance(rows, list) else []
+            got = parse(rows)
+            for name, s in got.items():
                 fresh.setdefault(name, {}).update(s)
+            # 記下收到幾列、認得幾列：回了資料卻一列都認不得＝欄位名稱改了，要亮黃燈
+            print(f"[fetch_origin] {label}：收到 {len(rows)} 列，認得 {sum(len(s) for s in got.values())} 筆"
+                  f"（{len(got)} 個品名）")
+            if rows and not got:
+                print(f"::warning::[fetch_origin] {label} 有回資料但一筆都認不得（欄位：{sorted(rows[0])[:8] if isinstance(rows[0], dict) else type(rows[0]).__name__}）"
+                      "→ 欄位名稱可能改了", file=sys.stderr)
         except Exception as e:
-            print(f"[fetch_origin] 抓取失敗：{redact(e)}", file=sys.stderr)
+            print(f"::warning::[fetch_origin] 抓取失敗：{redact(e)}", file=sys.stderr)
     if not fresh:
         print("::warning::[fetch_origin] 這次沒抓到任何產地價格 → 保留舊檔、不覆蓋（下次排程再試）", file=sys.stderr)
         return 1
@@ -118,7 +127,8 @@ def main(argv=None, getter=None, sleep=None):
     with open(a.out, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     n = sum(len(v) for v in out["items"].values())
-    print(f"[fetch_origin] {n} 個品名（{len(out['items'])} 種作物）→ {a.out}")
+    newest = max((x["latest"][0] for v in out["items"].values() for x in v), default="—")
+    print(f"[fetch_origin] {n} 個品名（{len(out['items'])} 種作物，最新 {newest}）→ {a.out}")
     return 0
 
 

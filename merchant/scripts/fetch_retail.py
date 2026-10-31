@@ -135,17 +135,26 @@ def main(argv=None, getter=None, sleep=None):
     months = dict(old.get("months") or {})
     try:
         meta = get_json(META, timeout=60, label="臺北市零售行情 目錄", **kw)
-        res = [(ym_of(r.get("name")), r.get("rid")) for r in (meta.get("payload") or {}).get("resources", [])]
-        res = sorted((ym, rid) for ym, rid in res if ym and rid)
+        raw = (meta.get("payload") or {}).get("resources", []) if isinstance(meta, dict) else []
+        res = sorted((ym, rid) for ym, rid in ((ym_of(r.get("name")), r.get("rid")) for r in raw) if ym and rid)
+        # 記清楚目錄裡有什麼：分得出「資料集本來就只到某月」和「名稱格式改了、程式看不懂」（不默默失敗）
+        if raw and not res:
+            print(f"::warning::[fetch_retail] 目錄有 {len(raw)} 筆資源，但月份名稱看不懂（例：{raw[-1].get('name')}）→ 名稱格式可能改了",
+                  file=sys.stderr)
         recent = {ym for ym, _ in res[-2:]}                    # 最近兩個月可能被修正 → 每次重抓
+        got_n = 0
         for ym, rid in res:
             if ym in months and ym not in recent:
                 continue
             got = parse_csv(get_text(DOWNLOAD.format(rid=rid), timeout=60, label=f"零售 {ym}", **kw))
             if got:
                 months[ym] = got
+                got_n += 1
+            else:
+                print(f"::warning::[fetch_retail] {ym} 的 CSV 讀不到「項目／平均價」欄位 → 欄位名稱可能改了", file=sys.stderr)
+        print(f"[fetch_retail] 目錄 {len(res)} 個月份（{res[0][0] if res else '—'}～{res[-1][0] if res else '—'}），這次下載 {got_n} 個")
     except Exception as e:
-        print(f"[fetch_retail] 抓取失敗：{redact(e)}", file=sys.stderr)
+        print(f"::warning::[fetch_retail] 抓取失敗：{redact(e)}", file=sys.stderr)
     if not months:
         print("::warning::[fetch_retail] 沒有任何零售資料 → 保留舊檔、不覆蓋（下次排程再試）", file=sys.stderr)
         return 1

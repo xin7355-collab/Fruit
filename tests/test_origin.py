@@ -61,3 +61,14 @@ def test_no_data_keeps_old_file(tmp_path):
     out.write_text('{"items":{"木瓜":[]}}', encoding="utf-8")
     assert fo.main(["--out", str(out)], getter=lambda *a, **k: R([]), sleep=lambda s: None) == 1
     assert out.read_text(encoding="utf-8") == '{"items":{"木瓜":[]}}', "抓不到就不覆蓋"
+
+
+def test_warns_when_fields_renamed(tmp_path, capsys):
+    """有回資料但一筆都認不得（欄位名稱改了）→ 亮黃燈、不覆蓋舊檔，而不是安靜地回「沒資料」。"""
+    out = tmp_path / "origin.json"
+    out.write_text('{"items":{}}', encoding="utf-8")
+    renamed = [{"Year": "2026", "Month": "10", "Day": "30", "Product": "木瓜", "Org": "當日平均價", "Price": "30"}]
+    assert fo.main(["--out", str(out)], getter=lambda *a, **k: R(renamed), sleep=lambda s: None) == 1
+    cap = capsys.readouterr()
+    assert "收到 1 列，認得 0 筆" in cap.out and "欄位名稱可能改了" in cap.err
+    assert out.read_text(encoding="utf-8") == '{"items":{}}'

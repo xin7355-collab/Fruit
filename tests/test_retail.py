@@ -85,3 +85,19 @@ def test_failure_keeps_old(tmp_path, monkeypatch):
         raise fr.get_json.__globals__["requests"].ConnectionError("down")
     assert fr.main(["--out", "retail.json"], getter=boom, sleep=lambda s: None) == 1
     assert (tmp_path / "retail.json").read_text(encoding="utf-8") == '{"months":{}}'
+
+
+def test_logs_catalog_and_warns_on_unknown_names(tmp_path, monkeypatch, capsys):
+    """目錄有資料但月份名稱看不懂時要亮黃燈（分得出「資料集只到某月」和「格式改了」），舊資料照留。"""
+    monkeypatch.chdir(tmp_path)
+    seed_wholesale(tmp_path)
+    assert fr.main(["--out", "retail.json"], getter=fake_getter([], lambda ym: 60)) == 0
+    out = capsys.readouterr().out
+    assert f"目錄 {len(MONTHS)} 個月份（{MONTHS[0][2]}～{MONTHS[-1][2]}），這次下載 {len(MONTHS)} 個" in out
+
+    def renamed(url, params=None, headers=None, timeout=None):
+        return R({"payload": {"resources": [{"name": "Retail price 2026-01", "rid": "z"}]}})
+    assert fr.main(["--out", "retail.json"], getter=renamed) == 0
+    cap = capsys.readouterr()
+    assert "::warning::" in cap.err and "名稱格式可能改了" in cap.err
+    assert len(json.load(open("retail.json", encoding="utf-8"))["months"]) == len(MONTHS)   # 舊月份沒被清掉
