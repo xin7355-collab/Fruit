@@ -23,11 +23,13 @@ defaults:
 jobs:
   prices:
     runs-on: ubuntu-latest
+    timeout-minutes: 75   # 卡住時自動中止（預設 6 小時會白燒分鐘數）
     steps:
       # 操作 main（GitHub Pages 服務的分支）
       - uses: actions/checkout@v4
         with:
           ref: main
+          persist-credentials: false   # 權杖不留在 .git/config；只在最後推送那步臨時帶入
 
       - uses: actions/setup-python@v5
         with:
@@ -40,9 +42,12 @@ jobs:
         run: python3 scripts/fetch_prices.py --days 730 || echo "行情抓取失敗，保留既有資料，前端仍可讀舊值/退回示範"
 
       - name: 提交更新的行情 JSON（供前端 index.html 讀取）
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git add prices_index.json prices
           if git diff --staged --quiet; then
             echo "行情無變更，略過提交。"

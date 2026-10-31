@@ -1,0 +1,73 @@
+name: 測試（資料管線＋手機冒煙）
+
+# 改到程式（前端、抓資料腳本、測試）才跑；排程的資料 commit 帶 [skip ci] 且不在 paths 內，不會觸發。
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'sw.js'
+      - 'merchant/index.html'
+      - 'merchant/sw.js'
+      - 'scripts/**'
+      - 'merchant/scripts/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'requirements-dev.txt'
+      - '.github/workflows/test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: 資料管線單元測試（pytest）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: 安裝固定版本的相依
+        run: pip install -r requirements-dev.txt
+      - name: 執行 pytest（不連網，兩支 App 都測）
+        run: python -m pytest -q tests/
+
+  e2e:
+    name: 手機尺寸冒煙測試（Playwright）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: 安裝固定版本的 Playwright
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: 安裝 Chromium
+        run: npx playwright install --with-deps chromium
+      - name: 跑兩支 App（iPhone 13 尺寸）
+        run: node tests/e2e/smoke.cjs
+      - name: 上傳截圖（失敗時方便看哪裡壞）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: test-results/
+          retention-days: 7

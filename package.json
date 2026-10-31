@@ -1,0 +1,11 @@
+{
+  "name": "jingzhun-apps-tests",
+  "private": true,
+  "description": "精準務農／精準進貨是純靜態 PWA（不需建置）；這裡只放測試工具：手機尺寸冒煙測試。",
+  "scripts": {
+    "test:e2e": "node tests/e2e/smoke.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

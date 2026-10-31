@@ -17,11 +17,13 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 20   # 卡住時自動中止（預設 6 小時會白燒分鐘數）
     steps:
       # 明確操作 main（GitHub Pages 服務的分支），不受預設分支設定影響
       - uses: actions/checkout@v4
         with:
           ref: main
+          persist-credentials: false   # 權杖不留在 .git/config；只在最後推送那步臨時帶入
 
       - uses: actions/setup-python@v5
         with:
@@ -62,9 +64,12 @@ jobs:
         run: python3 scripts/notify.py --advisory harvest_advisory.json --state notify_state.json
 
       - name: 提交更新的 JSON（供前端 index.html 讀取）
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git add typhoon_status.json harvest_advisory.json cwa_debug.json weather_events.json weather_forecast.json
           if git diff --staged --quiet; then
             echo "資料無變更，略過提交。"
