@@ -12,6 +12,10 @@
   - `resolveGhBase()` 已改成取「目前頁面所在目錄」，否則會讀到根目錄 farmer 的 JSON。
   - 兩支同網域 → localStorage / Cache Storage 共用：merchant 改用 `jb_` 前綴（匯入舊 `vs_` 備份自動轉換）；
     兩個 `sw.js` 只清自己前綴的快取，farmer SW 不攔截 `/merchant/`。**不要改回去。**
+  - **行情檔切分（2026-10-31）**：`prices/NN.json`＝本月 1 號前的歷史（同月內逐位元不變、不含 updated），
+    `prices/NN_recent.json`＝本月逐日（小檔每日更新）；index 的 `markets[].recent` 指向當月檔，前端 `loadMarket`
+    並行抓兩檔用 `mergeSeries` 合併。檔號沿用舊 index 的「市場名→檔名」不再依排序跳號。目的：止住 git 歷史每天暴增。
+  - 天氣排程兩支都有「預報抓成空就還原、不覆蓋」守門（未設 `CWA_API_KEY` 時保護既有資料）。
 
 ## ⚑ 這個 repo 是「精準進貨」商人版專用
 

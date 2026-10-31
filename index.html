@@ -748,11 +748,16 @@
 
 <script>
 /* ══════ 基礎 ══════ */
-const VERSION="v1.0.6";
+const VERSION="v1.0.7";
 /* 版本更新紀錄（最新在最上面）。未來每次改版就在陣列最前面新增一筆：
    {v:版本, date:"YYYY-MM-DD", title:"一句話重點", items:[本次更新條列…]}。
    會顯示在「設定→關於 App→更新內容」。 */
 const CHANGELOG=[
+  {v:"v1.0.7", date:"2026-10-31", title:"搬家到新網址＋行情載入更穩 🏠", items:[
+    "【搬家】精準務農改放在新網址；舊的主畫面捷徑請刪掉、用新網址重新「加入主畫面」。",
+    "【提醒】搬家後設定會回到預設；請到 設定→資料備份→匯入，選舊的備份檔即可還原。",
+    "【改善】行情資料改成「歷史＋當月」分開下載，每天更新更快、網站更穩定。",
+  ]},
   {v:"v1.0.6", date:"2026-08-08", title:"果級價格帶（大果／小果）🍈", items:[
     "【新增】每個品項卡與詳細頁顯示「大果(上價)／一般(中價)／小果(下價)」價格帶——政府批發資料每天都有上/中/下價，看得出大小果的行情落差。",
     "【新增】點進某品種看它自己的價格帶（實際大小分級標準各品種不同）。",
@@ -940,12 +945,19 @@ async function loadIndex(){
   try{const r=await fetch(`${resolveGhBase()}/prices_index.json`,{cache:"no-store"});if(!r.ok)throw 0;
     const j=await r.json();if(!j||!j.crop_map||!Array.isArray(j.markets)||!j.markets.length)throw 0;
     j._live=true;return {index:j,live:true};}catch(e){return {index:demoIndex(),live:false};}}
+function mergeSeries(dst,src){if(!src||typeof src!=="object")return;for(const c in src){if(src[c]&&typeof src[c]==="object")dst[c]=Object.assign(dst[c]||{},src[c]);}}
 async function loadMarket(mk){
   if(MDATA[mk])return MDATA[mk];
   const ent=((INDEX&&INDEX.markets)||[]).find(m=>m.name===mk);
   if(INDEX&&INDEX._live&&ent&&ent.file){
-    try{const r=await fetch(`${resolveGhBase()}/${ent.file}`,{cache:"no-store"});
-      if(r.ok){const j=await r.json();MDATA[mk]=(j&&j.data)||{};MVAR[mk]=(j&&j.variants)||{};return MDATA[mk];}}catch(e){}}
+    /* 行情切成「歷史檔(ent.file)＋當月檔(ent.recent)」兩支並行抓再合併；當月檔失敗/不存在只用歷史，不白畫面 */
+    try{const base=resolveGhBase();
+      const [r,r2]=await Promise.all([fetch(`${base}/${ent.file}`,{cache:"no-store"}),
+        ent.recent?fetch(`${base}/${ent.recent}`,{cache:"no-store"}).catch(()=>null):Promise.resolve(null)]);
+      if(r.ok){const j=await r.json();const d=(j&&j.data)||{},v=(j&&j.variants)||{};
+        try{if(r2&&r2.ok){const k=await r2.json();mergeSeries(d,k&&k.data);
+          const kv=(k&&k.variants)||{};for(const c in kv){v[c]=v[c]||{};mergeSeries(v[c],kv[c]);}}}catch(e){}
+        MDATA[mk]=d;MVAR[mk]=v;return MDATA[mk];}}catch(e){}}
   MDATA[mk]=demoMarketData(mk);MVAR[mk]={};return MDATA[mk];}
 async function loadWeather(){
   try{const r=await fetch(`${resolveGhBase()}/typhoon_status.json`,{cache:"no-store"});if(!r.ok)throw 0;

@@ -179,6 +179,75 @@ def fetch_market_all(market, start, end):
     return out
 
 
+
+# ── 行情檔切分（防 repo 膨脹）────────────────────────────────────────────
+# 舊做法每天整檔重寫 prices/NN.json（每檔數 MB、全部約 90MB）→ git 歷史每天暴增。
+# 新做法：
+#   prices/NN.json         ＝「本月 1 號以前」的歷史（整個月內內容固定、不含 updated → git 無變更，每月只換一次）
+#   prices/NN_recent.json  ＝「本月」逐日資料（小檔，每天更新）
+# 前端 loadMarket 會把兩檔合併；_recent 不存在時只用歷史檔（相容舊資料）。
+# 檔號以既有 prices_index.json 的「市場名→檔名」對照為準，新市場才取下一個空號
+# → 市場排序（依探索成交筆數）每天變動也不會讓檔號跳動、造成整批重寫。
+def month_start(dt):
+    return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def months_back_start(now, days):
+    """抓取起日：往回 `days` 天後再對齊到該月 1 號 → 同一個月內起日固定，歷史檔才會穩定不變。"""
+    return month_start(now - timedelta(days=days))
+
+
+def load_file_map():
+    try:
+        with open("prices_index.json", encoding="utf-8") as f:
+            old = json.load(f)
+        return {m["name"]: m["file"] for m in old.get("markets", []) if m.get("name") and m.get("file")}
+    except Exception:
+        return {}
+
+
+def assign_file(mk, file_map, used):
+    fname = file_map.get(mk)
+    if fname and fname not in used:
+        return fname
+    n = 1
+    taken = used | set(file_map.values())
+    while f"prices/{n:02d}.json" in taken:
+        n += 1
+    return f"prices/{n:02d}.json"
+
+
+def split_series(series, cutoff_iso):
+    hist = {d: v for d, v in series.items() if d < cutoff_iso}
+    rec = {d: v for d, v in series.items() if d >= cutoff_iso}
+    return hist, rec
+
+
+def write_split(fname, mk, now, mdata, variants):
+    """寫出歷史檔＋當月檔，回傳當月檔名。"""
+    cutoff = month_start(now).strftime("%Y-%m-%d")
+    h_data, r_data, h_var, r_var = {}, {}, {}, {}
+    for crop, s in mdata.items():
+        h, r = split_series(s, cutoff)
+        if h: h_data[crop] = h
+        if r: r_data[crop] = r
+    for crop, vv in variants.items():
+        for lab, s in vv.items():
+            h, r = split_series(s, cutoff)
+            if h: h_var.setdefault(crop, {})[lab] = h
+            if r: r_var.setdefault(crop, {})[lab] = r
+    recent = fname[:-5] + "_recent.json"
+    # 歷史檔：sort_keys + 不放 updated → 同月內內容逐位元相同，git 不會產生新版本
+    with open(fname, "w", encoding="utf-8") as f:
+        json.dump({"market": mk, "until": cutoff, "data": h_data, "variants": h_var},
+                  f, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    with open(recent, "w", encoding="utf-8") as f:
+        json.dump({"market": mk, "updated": now.strftime("%Y-%m-%d %H:%M"), "since": cutoff,
+                   "data": r_data, "variants": r_var},
+                  f, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return recent
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=730)   # 近 2 年，讓走勢更穩
@@ -190,7 +259,8 @@ def main():
         return
 
     now = datetime.now(TZ)
-    start = now - timedelta(days=args.days)
+    start = months_back_start(now, args.days)   # 對齊月初：同月內歷史檔內容固定
+    file_map, used_files = load_file_map(), set()
 
     os.makedirs("prices", exist_ok=True)
     index_markets, latest, latest_var, categories, total = [], {}, {}, {}, 0
@@ -247,11 +317,10 @@ def main():
         if not mdata:
             print(f"[fetch_prices] {mk}：無資料，略過。", file=sys.stderr)
             continue
-        fname = f"prices/{len(index_markets) + 1:02d}.json"
-        with open(fname, "w", encoding="utf-8") as f:
-            json.dump({"market": mk, "updated": now.strftime("%Y-%m-%d %H:%M"),
-                       "data": mdata, "variants": variants}, f, ensure_ascii=False)
-        index_markets.append({"name": mk, "file": fname})
+        fname = assign_file(mk, file_map, used_files)
+        used_files.add(fname)
+        recent = write_split(fname, mk, now, mdata, variants)
+        index_markets.append({"name": mk, "file": fname, "recent": recent})
         latest[mk] = {c: _latest_valid(s) for c, s in mdata.items()}
         # 各品種最新價（供跨市場比價「品種細部」）：{作物:{品種:latest}}
         if variants:

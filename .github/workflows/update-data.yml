@@ -35,6 +35,11 @@ jobs:
           CWA_API_KEY: ${{ secrets.CWA_API_KEY }}
         run: python3 scripts/fetch_cwa.py
 
+      - name: 守門：天氣預報抓成空（無金鑰/API 失敗）就不覆蓋既有好資料
+        run: |
+          python3 -c "import json,sys; sys.exit(0 if json.load(open('weather_forecast.json')).get('counties') else 1)" \
+            || { echo '天氣預報為空（可能未設 CWA_API_KEY），還原上次好資料、不覆蓋。'; git checkout -- weather_forecast.json; }
+
       - name: 計算搶收決策
         run: |
           FIELDS=data/fields.json
