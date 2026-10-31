@@ -416,7 +416,7 @@ def test_incremental_fetch_merges_window(fp, pc, tmp_path, monkeypatch):
     FixedNow(fp, "2026-10-30T09:00:00").install(monkeypatch, fp)
     old = {"甘藍": {"2025-06-01": {"avg": 11.0, "high": 11.0, "mid": 11.0, "low": 11.0, "qty": 10}}}
     paths = pc.write_market("prices/01.json", "台北一", datetime(2026, 10, 1, tzinfo=fp.TZ), old, {}, {})
-    json.dump({"fmt": fp.FMT, "markets": [{"name": "台北一", **paths, "dom": ["甘藍"], "closed": []}],
+    json.dump({"fmt": fp.FMT, "last_full": "2026-10-01", "markets": [{"name": "台北一", **paths, "dom": ["甘藍"], "closed": []}],
                "categories": {"甘藍": "蔬菜"}, "latest": {}, "latest_var": {}},
               open("prices_index.json", "w"), ensure_ascii=False)
     monkeypatch.setattr(fp, "MARKETS", ["台北一"])
@@ -426,11 +426,108 @@ def test_incremental_fetch_merges_window(fp, pc, tmp_path, monkeypatch):
         seen.append((start.date().isoformat(), end.date().isoformat()))
         return [r2(fp, datetime(2026, 10, 29), "甘藍-改良種", 25, 1000)], 0
     monkeypatch.setattr(fp, "fetch_market_all", fake_fetch)
-    monkeypatch.setattr(sys, "argv", ["fetch_prices.py", "--days", "730"] +
+    monkeypatch.setattr(sys, "argv", ["fetch_prices.py", "--days", "730", "--backfill-minutes", "0"] +
                         (["--no-discover"] if hasattr(fp, "resolve_markets") else []))
     fp.main()
-    assert seen == [("2026-10-17", "2026-10-30")], f"平常只抓近 14 天：{seen}"
+    assert seen == [("2026-10-17", "2026-10-30")], f"本月已整段重抓過 → 只抓近 14 天：{seen}"
     ix = json.load(open("prices_index.json"))
     d, _ = pc.read_market(ix["markets"][0])
     assert set(d["甘藍"]) == {"2025-06-01", "2026-10-29"}, "新抓的日子要併進舊資料、舊的保留"
     assert ix["fmt"] == fp.FMT and ix["markets"][0]["vfile"].endswith("_v.json")
+
+
+# ───────────────────────── 5 年封存、每月整段一次、上線時間 ─────────────────────────
+def test_archive_pack_roundtrip_and_yearly_split(pc, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    s = {"甘藍": {"2022-12-31": {"avg": 10.0, "high": 12.0, "mid": 10.0, "low": 8.0, "qty": 100},
+                 "2023-01-02": {"avg": 11.0, "high": 13.0, "mid": 11.0, "low": 9.0, "qty": 120}}}
+    assert pc.unpack(pc.pack(s)) == s
+    arch = pc.add_to_archive({}, "prices/14.json", "西螺", s)
+    assert set(arch) == {"2022", "2023"} and arch["2022"] == "prices/archive/14_2022.json"
+    more = {"甘藍": {"2022-12-30": {"avg": 9.0, "high": 9.0, "mid": 9.0, "low": 9.0, "qty": 1}}}
+    arch = pc.add_to_archive({"archive": arch}, "prices/14.json", "西螺", more)
+    assert set(pc.read_archive(arch["2022"])["甘藍"]) == {"2022-12-30", "2022-12-31"}, "併入不覆蓋既有日子"
+
+
+def test_signal_volume_ratio(pc):
+    pairs = [((date(2026, 7, 1) + timedelta(days=i)).isoformat(), 20, 1000) for i in range(100)]
+    pairs[-3:] = [(d, 40, 300) for d, _, _ in pairs[-3:]]
+    s = pc.signal(series_from(pairs))
+    assert s["qr"] == 0.3, s          # 近 3 日量只有平常的 30%
+
+
+def seed_fmt2(fp, pc, tmp_path, data, last_full):
+    os.makedirs(tmp_path / "prices", exist_ok=True)
+    paths = pc.write_market("prices/01.json", "台北一", datetime(2026, 10, 1, tzinfo=fp.TZ), data, {}, {})
+    json.dump({"fmt": fp.FMT, "last_full": last_full,
+               "markets": [{"name": "台北一", **paths, "dom": ["甘藍"], "closed": []}],
+               "categories": {"甘藍": "蔬菜"}, "latest": {}, "latest_var": {}},
+              open(tmp_path / "prices_index.json", "w"), ensure_ascii=False)
+
+
+def run_once(fp, monkeypatch, now_iso, backfill_min="0", fetch=None):
+    FixedNow(fp, now_iso).install(monkeypatch, fp)
+    monkeypatch.setattr(fp, "MARKETS", ["台北一"])
+    seen = []
+
+    def fake(market, start, end, getter=None, sleep=None):
+        seen.append((start.date().isoformat(), end.date().isoformat()))
+        return [r2(fp, end - timedelta(days=1), "甘藍-改良種", 25, 1000)], 0
+    monkeypatch.setattr(fp, "fetch_market_all", fetch or fake)
+    monkeypatch.setattr(sys, "argv", ["fetch_prices.py", "--days", "730", "--backfill-minutes", backfill_min] +
+                        (["--no-discover"] if hasattr(fp, "resolve_markets") else []))
+    fp.main()
+    return seen, json.load(open("prices_index.json"))
+
+
+def test_full_refetch_once_per_month_and_seen(fp, pc, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    day = {"avg": 11.0, "high": 11.0, "mid": 11.0, "low": 11.0, "qty": 10}
+    seed_fmt2(fp, pc, tmp_path, {"甘藍": {"2026-10-20": day}}, last_full="2026-10-01")
+    seen, ix = run_once(fp, monkeypatch, "2026-11-01T06:00:00")
+    assert seen[0][0] == "2024-11-01", f"新的月份第一次執行 → 整段重抓：{seen[0]}"
+    assert ix["last_full"] == "2026-11-01"
+    assert ix["seen"] == {"2026-10-31": "06:00"}, "記錄這個交易日的資料最早幾點出現"
+    seen2, ix2 = run_once(fp, monkeypatch, "2026-11-01T07:00:00")
+    assert seen2[0][0] == "2026-10-19", f"同一個月第二次 → 增量：{seen2[0]}"
+    assert ix2["seen"] == {"2026-10-31": "06:00"}, "同一天不覆蓋最早時間"
+
+
+def test_month_sliding_out_moves_to_archive(fp, pc, tmp_path, monkeypatch):
+    if not fp.ARCHIVE_YEARS:
+        pytest.skip("精準進貨不封存")
+    monkeypatch.chdir(tmp_path)
+    day = {"avg": 11.0, "high": 11.0, "mid": 11.0, "low": 11.0, "qty": 10}
+    seed_fmt2(fp, pc, tmp_path, {"甘藍": {"2024-10-15": day, "2026-10-20": day}}, last_full="2026-10-01")
+    _, ix = run_once(fp, monkeypatch, "2026-11-01T06:00:00")   # 2 年窗從 2024-11-01 起 → 2024-10 滑出
+    ent = ix["markets"][0]
+    assert "2024-10-15" in pc.read_archive(ent["archive"]["2024"])["甘藍"], "滑出 2 年窗的月份要進封存"
+    d, _ = pc.read_market(ent)
+    assert "2024-10-15" not in d["甘藍"], "主檔只留 2 年"
+    full, _ = pc.read_market(ent, with_archive=True)
+    assert "2024-10-15" in full["甘藍"], "with_archive 讀得到"
+
+
+def test_backfill_budget_and_failures(fp, pc, tmp_path, monkeypatch):
+    if not fp.ARCHIVE_YEARS:
+        pytest.skip("精準進貨不封存")
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("prices")
+    now = datetime(2026, 10, 31, 9, tzinfo=fp.TZ)
+    keep_from = "2024-10-01"
+    paths = pc.write_market("prices/01.json", "台北一", now, {"甘藍": {"2026-10-30": {"avg": 20.0, "qty": 9}}}, {}, {})
+    ents = [{"name": "台北一", **paths, "dom": ["甘藍"], "archive": {}, "archive_done": []}]
+    calls = []
+
+    def fetch(q, s, e):
+        calls.append(s.year)
+        if s.year == 2022:
+            return [], 1                                  # 2022 這段抓失敗 → 不可標完成
+        return [r2(fp, s, "甘藍-改良種", 30, 100)], 0
+    assert fp.backfill_archive(ents, now, keep_from, budget_s=0, fetch=fetch) == (0, 4), "預算 0 → 一個都不做、全留下次"
+    done, left = fp.backfill_archive(ents, now, keep_from, budget_s=600, fetch=fetch)
+    assert sorted(calls) == [2021, 2022, 2023, 2024] and done == 3
+    assert ents[0]["archive_done"] == ["2021", "2023", "2024"], "失敗的 2022 留到下次"
+    assert "2021-11-01" in pc.read_archive(ents[0]["archive"]["2021"])["甘藍"], "5 年前對齊月初（2021-11 起）"
+    rec = json.load(open(paths["recent"]))
+    assert "甘藍" in rec["sum"], "回填後重算看板摘要"

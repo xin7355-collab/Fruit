@@ -19,7 +19,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import requests
 
@@ -27,7 +27,9 @@ from http_retry import get_json, redact   # 指數退避重試（同目錄 http_
 import price_core                          # 進口分開、量加權、往年同期判斷、檔案格式（同目錄 price_core.py）
 
 FMT = 2          # 檔案格式：2＝進口不併母作物、上下價量加權、品種拆檔(_v)、看板摘要(sum)。舊格式會自動整個重抓一次
-INCR_DAYS = 14   # 平常只重抓最近 14 天（含晚到的更正）併進舊資料；每月 1 日、格式變更或 --full 才整段重抓 2 年
+INCR_DAYS = 14   # 平常只重抓最近 14 天（含晚到的更正）併進舊資料；每月第一次執行、格式變更或 --full 才整段重抓 2 年
+ARCHIVE_YEARS = 0   # 精準進貨不封存（同一批市場的 5 年資料在精準務農那邊；避免 repo／Pages 網站體積翻倍）
+SEEN_KEEP = 30      # index.seen：記錄每個交易日的資料「最早幾點」出現在 API（量測農業部上線時間，決定排程時段）
 
 TZ = timezone(timedelta(hours=8))
 API = "https://data.moa.gov.tw/Service/OpenData/FromM/FarmTransData.aspx"
@@ -259,6 +261,53 @@ def carry_forward(old_index, failed_markets, index_markets, latest, latest_var, 
     return carried
 
 
+def backfill_archive(index_markets, now, keep_from, budget_s, fetch=None):
+    """把 2 年窗以前、5 年以內的資料分「市場×年份」補進封存；每做完一個就寫檔並標記完成（index.archive_done），
+    時間預算用完就停、留到下一次（長工作不可整批做完才存，否則被逾時砍掉會全部白做）。
+    回傳 (完成數, 剩餘數)。"""
+    fetch = fetch or fetch_market_all
+    t0 = time.time()
+    start5 = months_back_start(now, ARCHIVE_YEARS * 365).date()
+    end = date.fromisoformat(keep_from) - timedelta(days=1)
+    units = [(e, y) for e in sorted(index_markets, key=lambda e: e["name"])
+             for y in range(start5.year, end.year + 1) if str(y) not in (e.get("archive_done") or [])]
+    done_n = 0
+    for i, (ent, y) in enumerate(units):
+        if time.time() - t0 > budget_s:
+            print(f"[backfill] 時間預算用完：完成 {done_n}、剩 {len(units) - i} 個（市場×年份）留到下次", file=sys.stderr)
+            return done_n, len(units) - i
+        lo, hi = max(start5, date(y, 1, 1)), min(end, date(y, 12, 31))
+        if lo <= hi:
+            recs, bad = fetch(ent.get("query") or ent["name"], datetime(lo.year, lo.month, lo.day, tzinfo=TZ),
+                              datetime(hi.year, hi.month, hi.day, tzinfo=TZ))
+            if bad:
+                print(f"::warning::[backfill] {ent['name']} {y}：{bad} 段失敗，下次再補", file=sys.stderr)
+                continue
+            mdata, _, _, _, _ = price_core.aggregate(recs, g=g, norm_crop=norm_crop, cat_by_code=CAT_BY_CODE,
+                                                     skip_base=SKIP_BASE, iso_from_roc=iso_from_roc,
+                                                     dom_prev=ent.get("dom", []))
+            ent["archive"] = price_core.add_to_archive(ent, ent["file"], ent["name"], mdata)
+            # 封存補進來後，看板摘要的「比往年同期」要重算（只改本月檔的 sum，其他不動）
+            refresh_summary(ent)
+            print(f"[backfill] {ent['name']} {y}：{len(mdata)} 種、{sum(len(s) for s in mdata.values())} 筆 → 封存")
+        ent["archive_done"] = sorted(set(ent.get("archive_done") or []) | {str(y)})
+        done_n += 1
+    if units:
+        print(f"[backfill] 本次完成 {done_n} 個（市場×年份），全部回填完成" if done_n == len(units) else
+              f"[backfill] 本次完成 {done_n}/{len(units)}")
+    return done_n, 0
+
+
+def refresh_summary(ent):
+    data, var = price_core.read_market(ent, with_archive=True)
+    if data is None or not ent.get("recent"):
+        return
+    with open(ent["recent"], encoding="utf-8") as f:
+        rec = json.load(f)
+    rec["sum"] = price_core.summarize(data, var or {})
+    price_core._dump(ent["recent"], rec)
+
+
 def load_file_map():
     try:
         with open("prices_index.json", encoding="utf-8") as f:
@@ -283,7 +332,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=730)   # 近 2 年，讓走勢更穩
     ap.add_argument("--probe", default="", help="探測模式：指定市場短名（如 台北一），dump 原始欄位後結束")
-    ap.add_argument("--full", action="store_true", help="不用增量，整段重抓（預設每月 1 日自動整段重抓）")
+    ap.add_argument("--full", action="store_true", help="不用增量，整段重抓（預設每月第一次執行時自動整段重抓）")
+    ap.add_argument("--backfill-minutes", type=float, default=20,
+                    help="封存回填的時間預算（分鐘）；用完就留到下一次，避免整個工作被逾時砍掉而白做")
     args = ap.parse_args()
 
     if args.probe:
@@ -296,7 +347,9 @@ def main():
     file_map, used_files = file_map_of(old_index), set()
     old_by_name = {m.get("name"): m for m in old_index.get("markets", [])}
     # 整段重抓：手動 --full、每月 1 日（順便校正 API 事後修正的舊資料）、或舊檔格式不同
-    full_all = args.full or now.day == 1 or old_index.get("fmt") != FMT
+    t_start = time.time()
+    # 每月第一次執行才整段重抓（校正 API 事後修正的舊資料）；改成每小時排程後，不能再用「1 號」判斷，否則 1 號會整段重抓 8 次
+    full_all = args.full or old_index.get("fmt") != FMT or str(old_index.get("last_full", ""))[:7] != now.strftime("%Y-%m")
     keep_from = start.strftime("%Y-%m-%d")
     print(f"[fetch_prices] 模式：{'整段重抓 ' + keep_from + ' 起' if full_all else f'增量（近 {INCR_DAYS} 天）'}")
     failed_markets, consecutive_fail = [], 0
@@ -311,8 +364,16 @@ def main():
             continue
         old_ent = old_by_name.get(mk)
         old_data = old_var = None
-        if not full_all and old_ent:
+        if old_ent:
             old_data, old_var = price_core.read_market(old_ent)
+        arch = dict((old_ent or {}).get("archive") or {})
+        if ARCHIVE_YEARS and old_data and old_ent.get("file"):
+            dropped = {c: {d: v for d, v in s.items() if d < keep_from} for c, s in old_data.items()}
+            dropped = {c: s for c, s in dropped.items() if s}
+            if dropped:
+                arch = price_core.add_to_archive(old_ent, old_ent["file"], mk, dropped)
+        if full_all:
+            old_data = old_var = None
         incremental = old_data is not None
         fstart = (now - timedelta(days=INCR_DAYS - 1)).replace(hour=0, minute=0, second=0, microsecond=0) \
             if incremental else start
@@ -341,8 +402,16 @@ def main():
             mdata, variants, closed = mdata_w, var_w, closed_w
         fname = assign_file(mk, file_map, used_files)
         used_files.add(fname)
-        paths = price_core.write_market(fname, mk, now, mdata, variants, price_core.summarize(mdata, variants))
-        index_markets.append({"name": mk, **paths, "dom": sorted(dom), "closed": price_core.trim_closed(closed, now)})
+        long_data = mdata
+        if arch:   # 摘要的「比往年同期」用到 5 年封存（品種不封存，仍是 2 年）
+            long_data = {}
+            for y in sorted(arch):
+                long_data = price_core.merge_series(long_data, price_core.read_archive(arch[y]))
+            long_data = price_core.merge_series(long_data, mdata)
+        paths = price_core.write_market(fname, mk, now, mdata, variants, price_core.summarize(long_data, variants))
+        index_markets.append({"name": mk, **paths, "dom": sorted(dom), "closed": price_core.trim_closed(closed, now),
+                              "query": query, "archive": arch,
+                              "archive_done": sorted((old_ent or {}).get("archive_done", []))})
         latest[mk] = {c: _latest_valid(s) for c, s in mdata.items()}
         # 各品種最新價（供跨市場比價「品種細部」）：{作物:{品種:latest}}
         lv = {}
@@ -368,9 +437,20 @@ def main():
         print(f"::warning::[fetch_prices] 本次 {len(failed_markets)} 個市場未完整抓到：{'、'.join(failed_markets)}；"
               f"其中 {len(carried)} 個沿用上次資料：{'、'.join(carried) or '（無舊資料可沿用）'}", file=sys.stderr)
 
+    if ARCHIVE_YEARS:
+        budget = max(0.0, args.backfill_minutes) * 60 - (time.time() - t_start)
+        backfill_archive(index_markets, now, keep_from, budget)
+
     crop_map = {c: c for c in categories}   # 展示名＝批發名＝母作物（API 驅動，免人工對照）
+    latest_day = max((v.get("date", "") for m in latest.values() for v in m.values() if v), default="")
+    seen = dict(old_index.get("seen") or {})
+    if latest_day and latest_day not in seen:
+        seen[latest_day] = now.strftime("%H:%M")      # 這個交易日的資料最早在這次執行出現
+    seen = dict(sorted(seen.items())[-SEEN_KEEP:])
     index = {"updated": now.strftime("%Y-%m-%d %H:%M"),
              "fmt": FMT,
+             "last_full": now.strftime("%Y-%m-%d") if full_all else old_index.get("last_full", ""),
+             "seen": seen,
              "years_back": round(args.days / 365, 1),
              "crop_map": crop_map,
              "categories": categories,   # {作物: 蔬菜|水果}（種類代碼自動分類）

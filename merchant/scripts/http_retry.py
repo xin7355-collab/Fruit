@@ -42,9 +42,9 @@ def _retry_after(resp):
         return None
 
 
-def get_json(url, *, params=None, headers=None, timeout=60, delays=DELAYS,
+def _request(url, parse, *, params=None, headers=None, timeout=60, delays=DELAYS,
              sleep=time.sleep, getter=None, label=""):
-    """GET 並解析 JSON；暫時性錯誤依 delays 重試。全部失敗時拋出最後一個錯誤（訊息已遮蔽金鑰）。"""
+    """共用重試核心：parse(回應) 丟 RetryableHTTPError＝內容不對（維護頁、截斷），也會重試。"""
     get = getter or requests.get
     name = label or redact(url)
     last = None
@@ -56,10 +56,7 @@ def get_json(url, *, params=None, headers=None, timeout=60, delays=DELAYS,
                 wait = _retry_after(r)
                 raise RetryableHTTPError(f"HTTP {r.status_code}")
             r.raise_for_status()          # 其他 4xx：不重試，直接往外丟
-            try:
-                return r.json()
-            except ValueError as e:       # 200 但不是 JSON（維護頁／截斷）
-                raise RetryableHTTPError(f"回應不是 JSON：{e}") from e
+            return parse(r)
         except (requests.Timeout, requests.ConnectionError,
                 requests.exceptions.ChunkedEncodingError, RetryableHTTPError) as e:
             last = e
@@ -72,3 +69,25 @@ def get_json(url, *, params=None, headers=None, timeout=60, delays=DELAYS,
               file=sys.stderr)
         sleep(d)
     raise RuntimeError(f"{name} 重試 {len(delays)} 次仍失敗：{redact(last)}")
+
+
+def _parse_json(r):
+    try:
+        return r.json()
+    except ValueError as e:               # 200 但不是 JSON（維護頁／截斷）
+        raise RetryableHTTPError(f"回應不是 JSON：{e}") from e
+
+
+def get_json(url, **kw):
+    """GET 並解析 JSON；暫時性錯誤依 delays 重試。全部失敗時拋出最後一個錯誤（訊息已遮蔽金鑰）。"""
+    return _request(url, _parse_json, **kw)
+
+
+def get_text(url, encoding="utf-8-sig", **kw):
+    """GET 文字（例如 CSV）；同一套重試規則。預設 utf-8-sig（政府 CSV 常帶 BOM）。"""
+    def parse(r):
+        try:
+            return r.content.decode(encoding)
+        except UnicodeDecodeError as e:
+            raise RetryableHTTPError(f"回應無法用 {encoding} 解碼：{e}") from e
+    return _request(url, parse, **kw)

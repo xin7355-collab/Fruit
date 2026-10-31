@@ -1,13 +1,18 @@
 name: "精準進貨｜更新全台批發行情"
 
-# 批發行情每交易日只公布一次（早上），且需抓 2 年歷史較慢（~15 分），
-# 故與天氣更新拆開：每日固定幾個時段觸發即可，不拖慢 update-data 的天氣/颱風更新。
-# 需要即時重抓時可用 workflow_dispatch 手動觸發。
+# 拍賣在清晨，各市場資料陸續上線 → 台灣 05:00–12:00 每小時跑一次（增量版只抓近 14 天，每次約 1～2 分鐘），
+# 14:00 再補一次。每月第一次執行自動整段重抓 2 年（校正事後更正）。index.json 的 seen 會記錄每天資料最早幾點出現，
+# 之後可依實測縮減時段。手動觸發可選「整段重抓」與「（精準進貨不封存）」。
 on:
   schedule:
-    - cron: '30 1 * * *'   # 09:30 台灣（早盤後）
-    - cron: '30 6 * * *'   # 14:30 台灣（補抓晚盤/漏抓）
+    - cron: '30 21-23,0-4 * * *'  # 台灣 05:30–12:30 每小時（與精準務農錯開半小時）
+    - cron: '30 6 * * *'          # 14:30 台灣
   workflow_dispatch:
+    inputs:
+      full:
+        description: 整段重抓 2 年
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -39,7 +44,12 @@ jobs:
         run: pip install -r scripts/requirements.txt
 
       - name: 抓取全台批發行情（農業部公開資料，免金鑰；近 2 年）
-        run: python3 scripts/fetch_prices.py --days 730 || echo "行情抓取失敗，保留既有資料，前端仍可讀舊值/退回示範"
+        env:
+          FULL: ${{ inputs.full && '--full' || '' }}
+        run: python3 scripts/fetch_prices.py --days 730 $FULL || echo "行情抓取失敗，保留既有資料，前端仍可讀舊值/退回示範"
+
+      - name: 抓取臺北市零售參考價（每月；失敗保留舊檔）
+        run: python3 scripts/fetch_retail.py || echo "零售資料這次沒抓到，保留舊檔（下次再試）"
 
       - name: 提交更新的行情 JSON（供前端 index.html 讀取）
         env:
@@ -48,7 +58,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git add prices_index.json prices
+          git add prices_index.json prices $(ls retail.json 2>/dev/null)
           if git diff --staged --quiet; then
             echo "行情無變更，略過提交。"
           else

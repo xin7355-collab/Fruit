@@ -1,0 +1,87 @@
+"""fetch_retail.py（精準進貨）：目錄解析、只補新月份、倍數逐菜計算、抓不到不覆蓋（不連網）。"""
+import json
+import os
+import sys
+from datetime import date, timedelta
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "merchant", "scripts"))
+import fetch_retail as fr  # noqa: E402
+import price_core as pc  # noqa: E402
+
+
+class R:
+    def __init__(self, payload=None, text=None):
+        self.status_code, self._p = 200, payload
+        self.content = (text or "").encode("utf-8-sig")
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._p
+
+
+def months_back(n):
+    """近 n 個月（含本月）的 [(民國年, 月, 'YYYY-MM')]，舊到新；日期以今天為基準，測試不會過期。"""
+    d, out = date.today().replace(day=1), []
+    for _ in range(n):
+        out.append((d.year - 1911, d.month, d.strftime("%Y-%m")))
+        d = (d - timedelta(days=1)).replace(day=1)
+    return out[::-1]
+
+
+MONTHS = months_back(4)
+
+
+def fake_getter(calls, price_of):
+    def get(url, params=None, headers=None, timeout=None):
+        calls.append(url)
+        if "dataset.view" in url:
+            return R({"payload": {"resources": [{"name": f"{y}年{m}月份", "rid": f"r{ym}"} for y, m, ym in MONTHS]
+                                  + [{"name": "說明文件", "rid": "x"}]}})
+        ym = url.split("/resource/r")[1].split("/")[0]
+        return R(text=f"項目,單位,平均零售價\n甘藍,元/台斤,{price_of(ym)}\n吳郭魚,元/台斤,90\n小白菜,元/台斤,-\n")
+    return get
+
+
+def seed_wholesale(tmp_path):
+    os.makedirs(tmp_path / "prices", exist_ok=True)
+    data = {"甘藍": {}}
+    for _, _, ym in MONTHS:
+        for day in range(1, 13):
+            data["甘藍"][f"{ym}-{day:02d}"] = {"avg": 20.0, "qty": 1000}
+    from datetime import datetime
+    paths = pc.write_market("prices/01.json", "台北一", datetime.now(), data, {}, {})
+    (tmp_path / "prices_index.json").write_text(json.dumps({"markets": [{"name": "台北一", **paths}]}, ensure_ascii=False),
+                                                encoding="utf-8")
+
+
+def test_ym_and_csv():
+    assert fr.ym_of("114年12月份") == "2025-12" and fr.ym_of("說明") is None
+    assert fr.parse_csv("項目,單位,平均零售價\n甘藍,元/台斤,68\n菠菜,元/台斤,-\n") == {"甘藍": 68.0}
+
+
+def test_multiple_per_crop_and_incremental(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    seed_wholesale(tmp_path)
+    calls = []
+    assert fr.main(["--out", "retail.json"], getter=fake_getter(calls, lambda ym: 60)) == 0
+    j = json.load(open("retail.json", encoding="utf-8"))
+    it = j["items"]["甘藍"][0]
+    assert it["mult"] == 5.0, f"零售 60 元/台斤 ÷（批發 20 元/公斤×0.6）＝5 倍：{it}"
+    assert it["latest"] == [MONTHS[-1][2], 60.0] and "吳郭魚" not in json.dumps(j["items"], ensure_ascii=False)
+    calls2 = []
+    fr.main(["--out", "retail.json"], getter=fake_getter(calls2, lambda ym: 66))
+    downloads = [u for u in calls2 if "/resource/" in u]
+    assert len(downloads) == 2, f"舊月份不重抓，只重抓最近兩個月：{downloads}"
+
+
+def test_failure_keeps_old(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "retail.json").write_text('{"months":{}}', encoding="utf-8")
+
+    def boom(*a, **k):
+        raise fr.get_json.__globals__["requests"].ConnectionError("down")
+    assert fr.main(["--out", "retail.json"], getter=boom, sleep=lambda s: None) == 1
+    assert (tmp_path / "retail.json").read_text(encoding="utf-8") == '{"months":{}}'

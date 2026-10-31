@@ -13,6 +13,7 @@ price_core.py —— 行情處理核心（精準務農 scripts/ 與精準進貨 
 回測後未採用為標籤（見 signal_es 說明），只當補充資訊。
 """
 import json
+import os
 import statistics
 from datetime import date, datetime, timedelta
 
@@ -196,6 +197,11 @@ def signal_es(es):
     base, n = season_baseline(es, es[-1][0])
     out = {"d": es[-1][0], "p": round(cur, 1), "l": es[-1][1], "r": round(old_r, 3), "t": old_t,
            "sr": round(cur / base, 3) if base else None, "n": n, "w": week_change(es)}
+    # 量能比：近 3 個交易日平均量 ÷ 近 90 筆日量中位數。回測（docs/backtest.md）顯示量縮不能預測之後會跌，
+    # 所以前端只拿來「說明」這個價錢是缺貨型還是盛產型，不下買賣結論。
+    qmed = statistics.median([v.get("qty") or 0 for _, v in es[-90:]])
+    if qmed > 0:
+        out["qr"] = round(sum(v.get("qty") or 0 for _, v in tail) / len(tail) / qmed, 2)
     if sum(v.get("qty") or 0 for _, v in tail) / len(tail) < THIN_QTY:
         out["q"] = 1
     return out
@@ -293,8 +299,9 @@ def write_market(fname, mk, now, mdata, variants, summary):
     return p
 
 
-def read_market(entry):
-    """讀回一個市場的完整序列（歷史＋當月；相容舊格式：品種放在 NN.json 裡）。讀不到回 (None, None)。"""
+def read_market(entry, with_archive=False):
+    """讀回一個市場的完整序列（歷史＋當月；相容舊格式：品種放在 NN.json 裡）。讀不到回 (None, None)。
+    with_archive＝True 時連 5 年封存的母作物一起讀（摘要的「比往年同期」與回測用；品種不封存）。"""
     def load(path):
         try:
             with open(path, encoding="utf-8") as f:
@@ -317,7 +324,61 @@ def read_market(entry):
             return None, None
         data = merge_series(data, r.get("data") or {})
         var = merge_variants(var, r.get("variants") or {})
+    if with_archive:
+        for path in sorted((entry.get("archive") or {}).values()):
+            data = merge_series(read_archive(path), data)    # 主檔（較新）優先
     return data, var
+
+
+# ───────────────────────── 5 年封存（只給後端摘要與回測用，手機不下載） ─────────────────────────
+ARCHIVE_DIR = "prices/archive"
+ARCH_FIELDS = ["avg", "high", "mid", "low", "qty"]
+
+
+def archive_path(fname, year):
+    """prices/14.json → prices/archive/14_2022.json（一個市場一年一檔；年份過完就不再變，git 不會反覆重寫）"""
+    stem = fname.rsplit("/", 1)[-1][:-5]
+    return f"{ARCHIVE_DIR}/{stem}_{year}.json"
+
+
+def pack(series_map):
+    """{作物:{日期:{avg..}}} → {作物:[[日期,avg,high,mid,low,qty],…]}：比物件格式小約一半。"""
+    return {c: [[d] + [v.get(k) for k in ARCH_FIELDS] for d, v in sorted(s.items())] for c, s in series_map.items() if s}
+
+
+def unpack(packed):
+    return {c: {r[0]: dict(zip(ARCH_FIELDS, r[1:])) for r in rows} for c, rows in (packed or {}).items()}
+
+
+def read_archive(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return unpack(json.load(f).get("data"))
+    except Exception:
+        return {}
+
+
+def write_archive(path, mk, year, series_map):
+    os.makedirs(path.rsplit("/", 1)[0], exist_ok=True)
+    _dump(path, {"market": mk, "year": int(year), "fields": ARCH_FIELDS, "data": pack(series_map)})
+
+
+def split_by_year(series_map):
+    out = {}
+    for c, s in series_map.items():
+        for d, v in s.items():
+            out.setdefault(d[:4], {}).setdefault(c, {})[d] = v
+    return out
+
+
+def add_to_archive(entry, fname, mk, series_map):
+    """把資料（例如滑出 2 年窗的那個月）併進對應年份的封存檔；回傳更新後的 {年: 路徑}。"""
+    arch = dict(entry.get("archive") or {})
+    for y, part in split_by_year(series_map).items():
+        path = arch.get(y) or archive_path(fname, y)
+        write_archive(path, mk, y, merge_series(read_archive(path), part))
+        arch[y] = path
+    return arch
 
 
 def trim_closed(days, now):
