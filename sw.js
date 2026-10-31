@@ -3,8 +3,8 @@
    - HTML / JSON 資料：network-first（連得上就拿最新，離線退回上次快取；HTML 再退回 index.html 殼）。
    - 圖示等靜態資源：cache-first。
    改版時把 CACHE 版本號 +1 即可讓舊快取失效（activate 會清掉非當前版本）。 */
-const CACHE = "jingzhun-farm-v24";
-const SHELL = ["./", "./index.html", "./core.js", "./privacy.html", "./terms.html", "./manifest.json",
+const CACHE = "jingzhun-farm-v25";
+const SHELL = ["./", "./index.html", "./core.js", "./tymap.js", "./privacy.html", "./terms.html", "./manifest.json",
                "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {

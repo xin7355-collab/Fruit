@@ -93,12 +93,17 @@ async function checkNewFeatures(page, name, json, base) {
   await page.dispatchEvent("#cropSearch", "input");
   await page.goto(page.url(), { waitUntil: "networkidle" });
   if (await page.locator("#clModal.on").count()) await page.click("#closeCl");
-  // 看板排序：選「最便宜」要記住、卡片照對比近 90 日由低到高
+  // 看板排序：選「較上週漲最多」要記住；「最便宜／最貴（對比近 90 日）」已拿掉（2026-10-31 使用者要求不下貴賤判斷）
   check(await page.locator("#bSort").count() === 1, `${name} 看板有排序選單`);
-  await page.selectOption("#bSort", "cheap");
+  const opts = await page.evaluate(() => [...document.querySelectorAll("#bSort option")].map((o) => o.value));
+  check(!opts.includes("cheap") && !opts.includes("dear"), `${name} 排序沒有「最便宜／最貴（對比近 90 日）」（${opts.join(",")}）`);
+  await page.selectOption("#bSort", "up");
   await page.waitForTimeout(400);
   const key = name === "merchant" ? "jb_sort" : "vs_sort";   // 兩支同網域：各用自己的前綴
-  check((await page.evaluate((k) => localStorage.getItem(k), key)) === "cheap", `${name} 排序選擇有記住（${key}）`);
+  check((await page.evaluate((k) => localStorage.getItem(k), key)) === "up", `${name} 排序選擇有記住（${key}）`);
+  await page.evaluate((k) => localStorage.setItem(k, "cheap"), key);   // 舊版存的值：要當成預設，不能壞掉
+  await page.evaluate(() => renderBoard());
+  check((await page.inputValue("#bSort")) === "", `${name} 舊版排序設定「cheap」自動當成預設順序`);
   await page.selectOption("#bSort", "");
   await page.waitForTimeout(300);
   // 詳細頁：月份熱圖、開價檢查、去年同期圖例
@@ -132,7 +137,8 @@ async function checkNewFeatures(page, name, json, base) {
   check(dgN === 1, `${name} 看板頂端有每日摘要（${name === "merchant" ? "今天進貨參考" : "今日提示"}）`);
   if (dgN) {
     const dgTxt = await page.textContent(".digest");
-    check(name === "merchant" ? /適合多進|少進|西螺|量/.test(dgTxt) : /適合出貨|便宜|量/.test(dgTxt), `${name} 摘要內容依角色不同（${dgTxt.slice(0, 26)}…）`);
+    check(/較上週|成交量|西螺/.test(dgTxt), `${name} 摘要列出較上週漲跌／成交量（${dgTxt.slice(0, 26)}…）`);
+    check(!/適合|偏貴|偏便宜|比平常(貴|便宜)/.test(dgTxt), `${name} 摘要只講事實、不下「適合出貨／多進」判斷`);
     await page.click(".dg-x");
     await page.waitForTimeout(300);
     check(await page.locator(".digest").count() === 0, `${name} 按 ✕ 後摘要收起`);
@@ -191,6 +197,88 @@ async function checkNewFeatures(page, name, json, base) {
   await page.screenshot({ path: path.join(OUT, `${name}-detail-new.png`), fullPage: true });
 }
 
+async function checkNoJudgmentAndNames(page, name) {
+  const t = await page.evaluate(() => { const fr = [...document.querySelectorAll("#catbar button")].find((b) => b.textContent.includes("水果"));
+    const veg = document.querySelector("#board").textContent; if (fr) fr.click(); return veg; });
+  await page.waitForTimeout(400);
+  const all = t + (await page.textContent("#board"));
+  check(!/偏貴|偏便宜/.test(all) && (await page.locator(".mcard .tag:not(.season)").count()) === 0, `${name} 看板卡片沒有偏貴／偏便宜標籤`);
+  check(!/綜合/.test(all), `${name} 看板卡片沒有「綜合」均價`);
+  if (name === "merchant") {
+    const mv = await page.locator(".mc-mv").count();
+    check(mv > 0, `merchant 多品種卡片顯示「主要品種」的實際價（${mv} 張）`);
+    const banana = await page.evaluate(() => { const c = availableCrops().find((x) => x === "香蕉"); return c ? mainVar(c) : "（無香蕉）"; });
+    check(banana === "香蕉" || banana === "（無香蕉）", `merchant 香蕉的主要品種是同名品種「香蕉」，不是量很少的芭蕉（${banana}）`);
+  }
+  const alias = await page.evaluate(() => [...document.querySelectorAll(".mcard .alias, .mcard .mc-nm small.alias")].map((e) => e.textContent).slice(0, 3));
+  const vegAlias = /\((高麗菜|空心菜|大白菜|地瓜葉|小黃瓜|芭樂|哈密瓜|香瓜|火龍果|柳丁)\)/.test(all + alias.join(""));
+  check(vegAlias, `${name} 名稱旁有常用俗名（例：番石榴(芭樂)；看到 ${alias.join("、") || "無"}）`);
+}
+
+async function checkLargeFont(ctx, url, name) {
+  const pre = name === "merchant" ? "jb_" : "vs_";
+  const p = await ctx.newPage();
+  await p.addInitScript((pre) => { try { localStorage.setItem(pre + "fs", "xl"); localStorage.removeItem(pre + "seenver"); } catch (e) {} }, pre);
+  await p.goto(url, { waitUntil: "networkidle" });
+  await p.waitForTimeout(700);
+  // 特大字體：「更新內容」彈窗的 ✕ 要在畫面內按得到（曾經整頁變寬、✕ 跑到畫面外）
+  if (await p.locator("#clModal.on").count()) {
+    const r = await p.locator("#closeCl").boundingBox();
+    check(!!r && r.x >= 0 && r.x + r.width <= 390, `${name} 特大字體：更新內容彈窗的 ✕ 在畫面內（x=${r && Math.round(r.x)}）`);
+    await p.click("#closeCl");
+  }
+  const g = await p.locator("#gear").boundingBox();
+  check(!!g && g.x + g.width <= 390, `${name} 特大字體：右上 ⚙️ 沒被擠出畫面`);
+  check(await noHScroll(p), `${name} 特大字體：看板沒有橫向捲動`);
+  const card = p.locator(".mcard .mc-right:not(.nolink), button.mcard").first();
+  if (await card.count()) { await card.click(); await p.waitForTimeout(500); check(await noHScroll(p), `${name} 特大字體：詳細頁沒有橫向捲動`); }
+  for (const t of name === "merchant" ? ["compare", "weather"] : ["forecast", "harvest"]) {
+    await p.click(`.tab[data-t="${t}"]`); await p.waitForTimeout(400);
+    check(await noHScroll(p), `${name} 特大字體：分頁「${t}」沒有橫向捲動`);
+  }
+  await p.screenshot({ path: path.join(OUT, `${name}-xl.png`) });
+  await p.evaluate((pre) => localStorage.removeItem(pre + "fs"), pre);
+  await p.close();
+}
+
+async function checkTyphoonMap(ctx, url, name) {
+  // 颱風詳情改版（2026-10-31）：彩色底圖＋已發生路徑／預報路徑／暴風圈／70% 範圍／你的位置；標籤不可重疊；
+  // 追蹤文字用使用者設定的縣市（精準進貨設台中就不能出現「對雲林」）。底圖磚在 CI 連不到也沒關係：擋掉、只驗向量圖層。
+  const pre = name === "merchant" ? "jb_" : "vs_", county = name === "merchant" ? "台中" : "雲林";
+  const p = await ctx.newPage(); const errs = [];
+  p.on("pageerror", (e) => errs.push(e.message));
+  p.on("console", (m) => { if (m.type() === "error" && !/tile\.openstreetmap|ERR_FAILED|net::/.test(m.text())) errs.push(m.text()); });
+  await p.route("**/typhoon_status.json", (r) => r.fulfill({ path: path.join(__dirname, "fixtures", "typhoon_status_infa.json"), contentType: "application/json" }));
+  await p.route(/tile\.openstreetmap\.org/, (r) => r.abort());
+  await p.addInitScript(([pre, c]) => { try { localStorage.setItem(pre + "region", c); } catch (e) {} }, [pre, county + (county === "台中" ? "市" : "縣")]);
+  await p.goto(url, { waitUntil: "networkidle" });
+  if (await p.locator("#clModal.on").count()) await p.click("#closeCl");
+  await p.evaluate(() => openTyphoon());
+  await p.waitForSelector("#tyMap .leaflet-tooltip", { timeout: 8000 }).catch(() => {});
+  await p.waitForTimeout(400);
+  const st = await p.evaluate(() => {
+    const tips = [...document.querySelectorAll("#tyMap .leaflet-tooltip")].map((t) => { const r = t.getBoundingClientRect(); return { t: t.textContent, r: [r.left, r.top, r.right, r.bottom] }; });
+    let overlap = 0;
+    for (let i = 0; i < tips.length; i++) for (let j = i + 1; j < tips.length; j++) {
+      const a = tips[i].r, b = tips[j].r; if (a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]) overlap++; }
+    return { paths: document.querySelectorAll("#tyMap path").length, tips: tips.map((x) => x.t), overlap,
+      status: (document.querySelector(".tyname") || {}).textContent || "", info: (document.querySelector(".tyinfo") || {}).textContent || "",
+      legend: (document.querySelector(".tylegend") || {}).textContent || "" };
+  });
+  check(st.paths >= 10, `${name} 颱風地圖畫出路徑、暴風圈、機率範圍（${st.paths} 個圖形）`);
+  check(st.tips.includes(county) && st.tips.some((t) => t.includes("現在")), `${name} 颱風地圖標出你的位置（${county}）與颱風目前位置`);
+  check(st.overlap === 0, `${name} 颱風地圖的標籤互不重疊（${st.tips.join("、")}）`);
+  check(st.status.includes(`對${county}`) && !(county !== "雲林" && st.status.includes("雲林")), `${name} 追蹤文字用你設定的縣市（${st.status.trim()}）`);
+  check(/14 級/.test(st.info) && /940 hPa/.test(st.info), `${name} 地圖下方有颱風強度（${st.info}）`);
+  check(/預報路徑/.test(st.legend) && /70% 機率範圍/.test(st.legend), `${name} 地圖圖例完整`);
+  check(await noHScroll(p), `${name} 颱風詳情沒有橫向捲動`);
+  await p.screenshot({ path: path.join(OUT, `${name}-typhoon-map.png`) });
+  await p.evaluate(() => closeTyphoon());
+  check(!(await p.locator("#tyMap").count()), `${name} 關閉颱風詳情會釋放地圖`);
+  check(errs.length === 0, `${name} 颱風詳情沒有 JS 錯誤${errs.length ? "：" + errs.slice(0, 2).join(" | ") : ""}`);
+  await p.close();
+}
+
 async function checkLazyVariants(page, name, json) {
   const before = json.filter(([, p]) => p.endsWith("_v.json")).length;
   check(before === 0, `${name} 首次載入沒有下載品種歷史（_v.json）`);
@@ -241,6 +329,10 @@ async function visitTabs(page, name, tabs) {
   await f.page.goto(base, { waitUntil: "networkidle" });
   await checkNewFeatures(f.page, "farmer", f.json, base);
   await f.page.goto(base, { waitUntil: "networkidle" });
+  await checkNoJudgmentAndNames(f.page, "farmer");
+  await checkLargeFont(ctx, base, "farmer");
+  await checkTyphoonMap(ctx, base, "farmer");
+  await f.page.goto(base, { waitUntil: "networkidle" });
   await visitTabs(f.page, "farmer", ["forecast", "harvest", "market"]);
   const lsFarmer = await f.page.evaluate(() => Object.keys(localStorage));
   check(lsFarmer.length > 0 && lsFarmer.every((k) => k.startsWith("vs_")), `farmer 只寫 vs_ 設定（${lsFarmer.join(",")}）`);
@@ -267,6 +359,10 @@ async function visitTabs(page, name, tabs) {
   check(cmp.length > 0 && !!cheap, `merchant 比價有排名且有「最便宜」（${cmp.length} 個市場）`);
   check(!cheap || (Date.parse(newest) - Date.parse(cheap.date)) / 864e5 <= 4, `merchant「最便宜」不是舊價（${cheap && cheap.date} vs 最新 ${newest}）`);
   check(cmp.filter((r) => r.old).every((r) => (Date.parse(newest) - Date.parse(r.date)) / 864e5 > 4), "merchant 標「舊價」的都超過 4 天沒成交");
+  await m.page.goto(base + "merchant/", { waitUntil: "networkidle" });
+  await checkNoJudgmentAndNames(m.page, "merchant");
+  await checkLargeFont(ctx, base + "merchant/", "merchant");
+  await checkTyphoonMap(ctx, base + "merchant/", "merchant");
   await m.page.goto(base + "merchant/", { waitUntil: "networkidle" });
   await visitTabs(m.page, "merchant", ["compare", "weather", "market"]);
   const lsAll = await m.page.evaluate(() => Object.keys(localStorage));

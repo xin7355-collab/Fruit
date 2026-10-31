@@ -80,14 +80,27 @@
     "甜菜根":"菾菜","青江菜":"青江白菜","打某菜":"茼蒿","老薑":"薑","嫩薑":"薑","芭樂":"番石榴","火龍果":"紅龍果",
     "柳丁":"甜橙","柳橙":"甜橙","橘子":"椪柑","文旦":"柚子","哈密瓜":"洋香瓜","香瓜":"甜瓜","美濃瓜":"甜瓜",
     "聖女番茄":"小番茄","旺來":"鳳梨","榴蓮":"榴槤","波羅蜜":"波蘿蜜","嘉寶果":"樹葡萄","獼猴桃":"奇異果",
-    "牛油果":"酪梨","番荔枝":"釋迦","西番蓮":"百香果","印度棗":"蜜棗","柿":"柿子","水蜜桃":"桃子","梅子":"梅","水梨":"梨"};
+    "牛油果":"酪梨","番荔枝":"釋迦","西番蓮":"百香果","印度棗":"蜜棗","柿":"柿子","水蜜桃":"桃子","梅子":"梅","水梨":"梨",
+    "大頭菜":"球莖甘藍","豆芽":"芽菜類","豆芽菜":"芽菜類","菜瓜":"絲瓜","金瓜":"南瓜","皇帝豆":"萊豆"};
   function aliasesOf(name){const out=[];for(const a in ALIASES)if(ALIASES[a]===name)out.push(a);return out;}
+  /* 名稱旁顯示的「最常用俗名」：番石榴(芭樂)、甘藍(高麗菜)。只放有把握、真的比批發名常用的；
+     批發名本身就是常用名（青蔥、茄子、香蕉…）不加，免得名稱變長又沒有幫助 */
+  const COMMON={
+    "甘藍":"高麗菜","包心白":"大白菜","包心白菜":"大白菜","蕹菜":"空心菜","甘薯葉":"地瓜葉","甘薯":"地瓜",
+    "花胡瓜":"小黃瓜","胡瓜":"大黃瓜","甜椒":"青椒","敏豆":"四季豆","菜豆":"長豆","芫荽":"香菜","大蒜":"蒜頭",
+    "花椰菜":"白花椰","青花苔":"綠花椰","萵苣菜":"A菜","蘿蔔":"白蘿蔔","胡蘿蔔":"紅蘿蔔","芋":"芋頭","薯蕷":"山藥",
+    "馬鈴薯":"洋芋","黃秋葵":"秋葵","豌豆":"荷蘭豆","落花生":"花生","芥菜":"刈菜","隼人瓜":"佛手瓜","扁蒲":"瓠瓜",
+    "濕木耳":"木耳","濕香菇":"香菇","金絲菇":"金針菇","豆薯":"涼薯","荸薺":"馬蹄","蕎頭":"蕗蕎","青江白菜":"青江菜",
+    "球莖甘藍":"大頭菜","芽菜類":"豆芽","絲瓜":"菜瓜","南瓜":"金瓜","萊豆":"皇帝豆",
+    "番石榴":"芭樂","紅龍果":"火龍果","甜橙":"柳丁","洋香瓜":"哈密瓜","甜瓜":"香瓜","樹葡萄":"嘉寶果","梨":"水梨","梅":"梅子"};
+  function commonOf(name){return Object.prototype.hasOwnProperty.call(COMMON,name)?COMMON[name]:null;}
   /* 名稱或任一俗名含關鍵字；回傳命中的俗名（批發名本身命中回 ""），都沒中回 null */
   function nameHit(name,q){q=String(q||"").trim().toLowerCase();if(!q)return null;
     if(name.toLowerCase().includes(q))return "";
-    for(const a of aliasesOf(name))if(a.toLowerCase().includes(q))return a;return null;}
-  function nameStarts(name,q){q=String(q||"").trim().toLowerCase();
-    return name.toLowerCase().startsWith(q)||aliasesOf(name).some(a=>a.toLowerCase().startsWith(q));}
+    for(const a of aliasesOf(name))if(a.toLowerCase().includes(q))return a;
+    const c=commonOf(name);return (c&&c.toLowerCase().includes(q))?c:null;}   // 名稱旁顯示的俗名也要搜得到
+  function nameStarts(name,q){q=String(q||"").trim().toLowerCase();const c=commonOf(name);
+    return name.toLowerCase().startsWith(q)||aliasesOf(name).some(a=>a.toLowerCase().startsWith(q))||(!!c&&c.toLowerCase().startsWith(q));}
 
   /* ── 開價檢查：對方報價 vs 當日批發上/中/下價 ──
      role="farmer"：販仔來收購（比「批發價扣拍賣手續費」後農民實得）；role="merchant"：供應商報價（比批發價本身）。
@@ -123,6 +136,6 @@
 
   return {doyOf:doyOf,weekOf:weekOf,median:median,pctile:pctile,sortedEntries:sortedEntries,mergeSeries:mergeSeries,
     addDays:addDays,predictPrice:predictPrice,lunarMD:lunarMD,toLunar:toLunar,festivals:festivals,
-    ALIASES:ALIASES,aliasesOf:aliasesOf,nameHit:nameHit,nameStarts:nameStarts,judgeOffer:judgeOffer,
+    ALIASES:ALIASES,aliasesOf:aliasesOf,COMMON:COMMON,commonOf:commonOf,nameHit:nameHit,nameStarts:nameStarts,judgeOffer:judgeOffer,
     monthIndex:monthIndex,lastYearSeries:lastYearSeries};
 });

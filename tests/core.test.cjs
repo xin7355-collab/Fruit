@@ -52,6 +52,17 @@ test("俗名：高麗菜找得到甘藍；批發名本身也找得到", () => {
   for (const t of Object.values(C.ALIASES)) assert.ok(t.length > 0);
 });
 
+test("名稱旁的常用俗名：每個俗名都要搜得到同一個批發名（顯示跟搜尋一致）", () => {
+  assert.equal(C.commonOf("番石榴"), "芭樂");
+  assert.equal(C.commonOf("甘藍"), "高麗菜");
+  assert.equal(C.commonOf("青蔥"), null);          // 批發名本身就是常用名：不加
+  assert.equal(C.commonOf("constructor"), null);   // 不會撈到物件內建屬性
+  for (const [w, a] of Object.entries(C.COMMON)) {
+    const hit = C.nameHit(w, a);
+    assert.ok(hit !== null, `${w}(${a})：搜尋「${a}」要找得到 ${w}`);
+  }
+});
+
 test("開價檢查：農友（扣 6% 手續費）與商人", () => {
   const day = { avg: 25, high: 30, mid: 25, low: 20 };
   assert.equal(C.judgeOffer(15, "kg", day, "farmer").level, "bad");          // < 20×0.94
@@ -69,4 +80,33 @@ test("12 個月價格指數與去年同期平移", () => {
   assert.equal(mi[6].idx, 2); assert.equal(mi[0].idx, 1);
   const ly = C.lastYearSeries({ "2024-02-29": { avg: 1 }, "2025-10-30": { avg: 2 } }, "2025-01-01", "2026-12-31");
   assert.deepEqual(Object.keys(ly).sort(), ["2025-02-28", "2026-10-30"]);
+});
+
+// ── tymap.js（颱風地圖，兩支 App 共用） ──
+const TY = require(path.join(ROOT, "tymap.js")).TyMap;
+
+test("兩支 App 的 tymap.js、vendor/leaflet 內容一致", () => {
+  for (const f of ["tymap.js", "vendor/leaflet/leaflet.js", "vendor/leaflet/leaflet.css"])
+    assert.equal(fs.readFileSync(path.join(ROOT, f), "utf8"), fs.readFileSync(path.join(ROOT, "merchant", f), "utf8"), f);
+});
+
+test("颱風地圖：風級與強度（中央氣象署蒲福風級）", () => {
+  assert.equal(TY.beaufort(45), 14);        // 煙花 2026-10-31：最大風速 45 m/s＝14 級
+  assert.equal(TY.beaufort(15), 7);         // 7 級風＝暴風圈（Circle15ms）
+  assert.equal(TY.beaufort(25), 10);        // 10 級風（Circle25ms）
+  assert.equal(TY.beaufort(0.1), 0);
+  assert.equal(TY.beaufort("x"), null);
+  assert.equal(TY.category(45), "中度颱風");
+  assert.equal(TY.category(55), "強烈颱風");
+  assert.equal(TY.category(20), "輕度颱風");
+  assert.equal(TY.fmtTime("2026-11-01T14:00:00+08:00"), "11/1 14時");
+});
+
+test("颱風地圖：70% 機率範圍＝相鄰兩圓的凸包、方向一致（重疊處填色不會被挖空）", () => {
+  const sq = TY.hull([[0, 0], [0, 1], [1, 1], [1, 0], [0.5, 0.5]]);
+  assert.equal(sq.length, 4);               // 中間的點不在外框上
+  const area = (r) => r.reduce((s, p, i) => { const q = r[(i + 1) % r.length]; return s + p[1] * q[0] - q[1] * p[0]; }, 0) / 2;
+  const polys = TY.cone([{ lat: 22.2, lng: 142.9, r: 0 }, { lat: 22.8, lng: 143.3, r: 30 }, { lat: 23.5, lng: 143.6, r: 60 }]);
+  assert.equal(polys.length, 2);
+  for (const [ring] of polys) assert.ok(area(ring) > 0, "每塊都是逆時針（x＝經度、y＝緯度）");
 });
