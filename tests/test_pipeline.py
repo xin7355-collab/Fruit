@@ -109,7 +109,7 @@ def test_non_json_200_is_retried(hr):
 
 
 def test_redact(hr):
-    s = "fail https://a/b?format=JSON&Authorization=CWA-AB12-CD34&api_key=zzz&token=t0k"
+    s = "fail https://a/b?format=JSON&Authorization=CWA-AB12-CD34&api_key=zzz&token=t0k"   # 假金鑰，測遮蔽用 guardrails: ignore
     out = hr.redact(s)
     assert "CWA-AB12" not in out and "zzz" not in out and "t0k" not in out and "format=JSON" in out
 
@@ -246,3 +246,46 @@ def test_breaker_stops_after_3_consecutive_failures(fp, tmp_path, monkeypatch):
     seed_old(tmp_path, names)
     code, _, calls = run_main(fp, tmp_path, monkeypatch, names, {n: "fail" for n in names})
     assert calls == ["A", "B", "C"] and code == 1
+
+
+# ───────────────────────── API 9999 筆截斷 ─────────────────────────
+def fake_capped_api(fp, per_day, newest_first=True, cap=9999):
+    """模擬農業部 API：區間內每天 per_day 筆，超過 cap 只回 cap 筆（截掉一端）。"""
+    calls = []
+
+    def get(url, params=None, headers=None, timeout=None):
+        s = datetime.strptime(fp.iso_from_roc(params["StartDate"]), "%Y-%m-%d")
+        e = datetime.strptime(fp.iso_from_roc(params["EndDate"]), "%Y-%m-%d")
+        calls.append((s, e))
+        rows, d = [], s
+        while d <= e:
+            rows += [{"交易日期": fp.roc(d), "作物名稱": f"菜{i}", "種類代碼": "N04", "平均價": 10, "交易量": 1}
+                     for i in range(per_day)]
+            d += timedelta(days=1)
+        if newest_first:
+            rows.reverse()
+        return FakeResp(200, rows[:cap])
+    get.calls = calls
+    return get
+
+
+@pytest.mark.parametrize("newest_first", [True, False])
+def test_capped_chunks_are_refetched_completely(fp, newest_first):
+    start = datetime(2024, 10, 1, tzinfo=fp.TZ)
+    end = datetime(2026, 9, 30, tzinfo=fp.TZ)
+    get = fake_capped_api(fp, per_day=400, newest_first=newest_first)   # 91 天 ≈ 3.6 萬筆 → 一定被截斷
+    recs, failed = fp.fetch_market_all("台北一", start, end, getter=get, sleep=lambda s: None)
+    assert failed == 0
+    from collections import Counter
+    per_day = Counter(r["交易日期"] for r in recs)
+    total_days = (end - start).days + 1
+    assert len(per_day) == total_days, "每一天都要抓到（不能只剩每段最後幾週）"
+    assert set(per_day.values()) == {400}, "每天的筆數要完整、不能重複或殘缺"
+    assert len(get.calls) < 60, f"請求數要合理（實際 {len(get.calls)} 次）"
+
+
+def test_single_day_over_cap_marked_incomplete(fp):
+    day = datetime(2026, 10, 1, tzinfo=fp.TZ)
+    get = fake_capped_api(fp, per_day=12000)
+    recs, failed = fp.fetch_market_all("台北一", day, day, getter=get, sleep=lambda s: None)
+    assert failed == 1

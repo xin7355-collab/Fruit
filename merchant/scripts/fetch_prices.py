@@ -154,25 +154,49 @@ def probe(market):
     print(f"[probe] {market}：{len(recs)} 筆、{len(crops)} 種作物；欄位={out['sample_keys']}")
 
 
+API_CAP = 9999   # 農業部 API 單次最多回 9999 筆：回滿＝被截斷（大市場 90 天約 2～4 萬筆，只留下最後 3～5 週）
+
+
+def _shrink_days(recs, days_now):
+    """被截斷時估下一次該抓幾天：依這次回來資料涵蓋的日曆天數估密度，抓它的 8 成，且至少砍半。"""
+    ds = sorted({iso_from_roc(str(g(r, "交易日期", "TransDate") or "")) for r in recs} - {None})
+    covered = (datetime.fromisoformat(ds[-1]) - datetime.fromisoformat(ds[0])).days + 1 if ds else 0
+    est = int(covered * 0.8) if covered else days_now // 2
+    return max(1, min(days_now // 2, est))
+
+
 def fetch_market_all(market, start, end, getter=None, sleep=time.sleep):
-    """逐市場、不帶作物名、分季抓（避免單次回應過大）→ 回傳該市場所有原始 records。
-    17 市場 × 8 季 ≈ 136 次請求（vs 逐品項 1400+），快且完全不漏品項。
-    回傳 (records, failed)：failed＝重試後仍失敗的段數。>0 代表這個市場資料有缺口，
-    呼叫端不可拿來覆蓋舊檔（否則 K 線會少一季、90 日中位數失真）。"""
-    out, cur, failed = [], start, 0
+    """逐市場、不帶作物名、分段抓 → 回傳該市場所有原始 records。
+    區段預設 91 天；回滿 API_CAP 筆代表被截斷 → 這批整個不用（不賭 API 的排序），縮短區段重抓，
+    學到的區段長度沿用到同市場後面的區段（小市場 91 天一段即可，台北一/台中等大市場約 2～3 週一段）。
+    回傳 (records, failed)：failed＝重試後仍失敗（或單日就超過上限）的段數。>0 代表資料有缺口，
+    呼叫端不可拿來覆蓋舊檔（否則 K 線會少一段、90 日中位數失真）。"""
+    out, cur, failed, days = [], start, 0, 91
     while cur <= end:
-        ce = min(cur + timedelta(days=90), end)
+        ce = min(cur + timedelta(days=days - 1), end)
         params = {"StartDate": roc(cur), "EndDate": roc(ce), "Market": market}
         try:
             j = get_json(API, params=params, headers=UA, timeout=180, getter=getter, sleep=sleep,
                          label=f"{market} {roc(cur)}~{roc(ce)}")
             recs = j if isinstance(j, list) else (j.get("data") or j.get("RS") or j.get("Data") or [])
-            out.extend(recs)
         except Exception as e:
             failed += 1
             print(f"[fetch_prices] {market} {roc(cur)}~{roc(ce)} 重試後仍失敗：{redact(e)}", file=sys.stderr)
-        cur = ce + timedelta(days=1)
+            cur = ce + timedelta(days=1)
+            sleep(0.3)
+            continue
         sleep(0.3)
+        span = (ce - cur).days + 1
+        if len(recs) >= API_CAP and span > 1:
+            days = _shrink_days(recs, span)
+            print(f"[fetch_prices] {market} {roc(cur)}~{roc(ce)} 回滿 {len(recs)} 筆（被截斷）→ 改每 {days} 天一段重抓",
+                  file=sys.stderr)
+            continue                      # 同一個起日、較短區段重抓；被截斷的這批不採用
+        if len(recs) >= API_CAP:
+            failed += 1                   # 單日就超過上限：無法再切，視為不完整
+            print(f"::warning::[fetch_prices] {market} {roc(cur)} 單日回滿 {len(recs)} 筆，資料可能不完整", file=sys.stderr)
+        out.extend(recs)
+        cur = ce + timedelta(days=1)
     return out, failed
 
 
