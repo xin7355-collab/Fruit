@@ -358,8 +358,9 @@ def series_from(pairs):
     return {d: {"avg": a, "qty": q} for d, a, q in pairs}
 
 
-def test_signal_tag_old_rule_with_season_ratio(pc):
-    # 每年 10 月便宜（20 元）、其他月份 40 元；今年 10 月 21 元 → 對往年同期是「正常」，舊法（近 90 筆）卻會說「偏便宜」
+def test_signal_tag_uses_season_when_history_exists(pc):
+    # 每年 10 月便宜（20 元）、其他月份 40 元；今年 10 月 21 元 → 對往年同期是「正常」，舊法（近 90 筆）卻會說「偏便宜」。
+    # 2026-10-31 補齊 5 年後回測：往年同期勝過舊法 → t 用往年同期（舊法比值 r 照留，詳細頁顯示用）
     pairs, d = [], date(2024, 10, 1)
     while d <= date(2026, 10, 30):
         a = 21 if d.year == 2026 and d.month == 10 else (20 if d.month in (10, 11) else 40)
@@ -367,15 +368,16 @@ def test_signal_tag_old_rule_with_season_ratio(pc):
         d += timedelta(days=1)
     s = pc.signal(series_from(pairs))
     es = sorted(series_from(pairs).items())
-    assert s["t"] == pc.old_signal(es)[0] == "dn", "看板標籤沿用舊法（回測後未改）"
-    assert abs(s["sr"] - 1.05) < 0.01, f"比往年同期＝21/20（補充資訊）：{s}"
-    assert pc.season_signal(es) == ("mid", "s"), "往年同期判斷法（回測對照用）說「正常」"
+    assert pc.old_signal(es)[0] == "dn", "舊法（近 90 筆）會說偏便宜"
+    assert s["t"] == "mid" and s["tb"] == "s", f"有往年同期就用往年同期：21/20＝正常：{s}"
+    assert abs(s["sr"] - 1.05) < 0.01, f"比往年同期＝21/20：{s}"
+    assert pc.season_signal(es) == ("mid", "s")
 
 
 def test_signal_falls_back_when_no_history(pc):
     pairs = [((date(2026, 8, 1) + timedelta(days=i)).isoformat(), 30 if i < 80 else 45, 1000) for i in range(90)]
     s = pc.signal(series_from(pairs))
-    assert s["t"] == "up" and s["sr"] is None
+    assert s["t"] == "up" and s["tb"] == "r" and s["sr"] is None, "沒有往年同期（不到一年）就退回舊法"
     assert pc.season_signal(sorted(series_from(pairs).items())) == ("up", "r")
 
 

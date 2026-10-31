@@ -58,6 +58,19 @@ def test_price_alerts_trigger_and_dedup(tmp_path):
     assert "西螺|甘藍" not in st4, "回到正常 → 重置"
 
 
+def test_price_alert_says_which_baseline(tmp_path):
+    """有往年同期（tb=s）就寫「比往年同期低 X%」，數字用 sr；沒有才寫「比近 90 天中位數」。"""
+    now = datetime(2026, 10, 31, 9, tzinfo=notify.TZ)
+    s = sig("2026-10-30", "dn", 0.95)
+    s.update({"tb": "s", "sr": 0.80})
+    idx = write_market(tmp_path, {"甘藍": s})
+    msgs, _ = notify.price_alerts(idx, "西螺", ["甘藍"], {}, now=now)
+    assert len(msgs) == 1 and "比往年同期低 20%" in msgs[0], msgs
+    idx = write_market(tmp_path, {"甘藍": sig("2026-10-30", "dn", 0.85)})
+    msgs, _ = notify.price_alerts(idx, "西螺", ["甘藍"], {}, now=now)
+    assert "比近 90 天中位數低 15%" in msgs[0], msgs
+
+
 def test_price_mode_without_config_is_quiet(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("NOTIFY_PRICE_CROPS", raising=False)
     monkeypatch.chdir(tmp_path)

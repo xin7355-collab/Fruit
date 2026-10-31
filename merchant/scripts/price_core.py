@@ -10,7 +10,7 @@ price_core.py —— 行情處理核心（精準務農 scripts/ 與精準進貨 
 - write_market()    寫三個檔：NN.json（本月前母作物）、NN_v.json（本月前品種，點品種才載）、NN_recent.json（本月＋摘要）。
 
 「往年同期」做法與門檻 0.88/1.12 參考 mina201199/veggie-price-tw（MIT），本檔程式為自行撰寫；
-回測後未採用為標籤（見 signal_es 說明），只當補充資訊。
+2026-10-31 補齊 5 年封存後重測，勝過舊法 → t 改用往年同期（見 signal_es 說明）。看板依使用者要求不顯示 t。
 """
 import json
 import os
@@ -188,14 +188,20 @@ def signal(series):
 def signal_es(es):
     """signal() 的本體：吃「已排序、avg>0」的 [(日期, 值)]。回測逐日截斷資料時直接呼叫（與線上同一段程式）。
 
-    ⚑ 2026-10-31 回測（scripts/backtest.py、docs/backtest.md）：「往年同期 0.88/1.12」沒有比舊法準
-      （命中率 57% vs 57%、偏便宜後−偏貴後差距 11.0% vs 11.4%），而且把 42% 的日子標成偏便宜
-      （去年同期剛好被颱風墊高、只有一年可比）。所以標籤 t 沿用舊法（單日價 vs 近 90 筆中位數 ±10%），
-      往年同期只當補充資訊 sr（比往年同期的比值），不拿來下貴賤結論。"""
+    ⚑ 2026-10-31 只有 2 年資料時回測：往年同期沒有比舊法準（只有一年可比，去年同期剛好被颱風墊高）。
+      同日補齊 5 年封存後重測（2022-11～2026-10 樣本外）：往年同期 0.88/1.12 勝過舊法——
+      偏便宜後 10 個交易日命中率 62.5% vs 57.4%、偏貴 56.7% vs 54.4%、差距 16.5% vs 10.6%
+      → t 改用往年同期，往年同期樣本不足（<15 個交易日）才退回舊法；tb 記用了哪個基準（s 往年同期／r 近 90 筆）。
+      看板已依使用者要求不顯示 t（會讓人誤會），目前只有 LINE 行情推播用它判斷要不要通知；r 仍是舊法比值（詳細頁顯示用）。"""
     old_t, old_r = old_signal(es)
     cur, tail = recent_price(es)
     base, n = season_baseline(es, es[-1][0])
-    out = {"d": es[-1][0], "p": round(cur, 1), "l": es[-1][1], "r": round(old_r, 3), "t": old_t,
+    if base:
+        sr = cur / base
+        t, tb = ("up" if sr >= TAG_HI else "dn" if sr <= TAG_LO else "mid"), "s"
+    else:
+        t, tb = old_t, "r"
+    out = {"d": es[-1][0], "p": round(cur, 1), "l": es[-1][1], "r": round(old_r, 3), "t": t, "tb": tb,
            "sr": round(cur / base, 3) if base else None, "n": n, "w": week_change(es)}
     # 量能比：近 3 個交易日平均量 ÷ 近 90 筆日量中位數。回測（docs/backtest.md）顯示量縮不能預測之後會跌，
     # 所以前端只拿來「說明」這個價錢是缺貨型還是盛產型，不下買賣結論。
@@ -208,7 +214,7 @@ def signal_es(es):
 
 
 def season_signal(es):
-    """回測用：往年同期判斷法（未採用為標籤，保留供比較）。"""
+    """回測用：往年同期判斷法（與 signal_es 的 t 同一套規則；回測直接呼叫比較省時間）。"""
     cur, _ = recent_price(es)
     base, _ = season_baseline(es, es[-1][0])
     if base is None:
