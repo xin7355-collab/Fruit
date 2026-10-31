@@ -91,9 +91,11 @@ def wholesale_monthly(series, variety=None, variants=None):
     """批發月均（元/公斤）：有品種關鍵字且找得到品種就用品種，否則用母作物。"""
     s = series
     if variety and variants:
-        lab = next((k for k in variants if variety in k), None)
-        if lab:
-            s = variants[lab]
+        # 名稱含關鍵字的品種可能不只一個（例：油麥菜、油麥菜水耕）：完全相同優先，其次交易天數最多的，
+        # 同分再比名稱——不能取「第一個」，dict 順序不保證每次一樣，倍數會每次跑出不同結果
+        hits = [k for k in variants if variety in k]
+        if hits:
+            s = variants[min(hits, key=lambda k: (k != variety, -len(variants[k]), k))]
     by = {}
     for d, v in s.items():
         if v and (v.get("avg") or 0) > 0:

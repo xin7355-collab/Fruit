@@ -116,7 +116,7 @@ def aggregate(recs, *, g, norm_crop, cat_by_code, skip_base, iso_from_roc, dom_p
 def merge_series(old, new, keep_from=None):
     """{作物:{日期:值}}：new 的日子覆蓋 old；keep_from（ISO）之前的日子丟掉（維持約 2 年窗）。"""
     out = {}
-    for c in set(old) | set(new):
+    for c in sorted(set(old) | set(new)):     # 排序：記憶體裡的順序每次執行都一樣（set 的順序會隨機變）
         s = dict(old.get(c, {}))
         s.update(new.get(c, {}))
         if keep_from:
@@ -128,7 +128,7 @@ def merge_series(old, new, keep_from=None):
 
 def merge_variants(old, new, keep_from=None):
     out = {}
-    for c in set(old) | set(new):
+    for c in sorted(set(old) | set(new)):
         m = merge_series(old.get(c, {}), new.get(c, {}), keep_from)
         if m:
             out[c] = m

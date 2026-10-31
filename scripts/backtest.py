@@ -310,17 +310,19 @@ def _ordinal(iso):
     return date.fromisoformat(iso).toordinal()
 
 
-def _simulate(home, h_es, others, acc):
+def _simulate(home, h_es, others, acc, start=None):
     """一個比價單位（某作物或某品種）：每個交易日收市後照 App 比價頁的規則（近 4 天內有成交、含運價最低）挑市場，
     下一個交易日去那裡進貨；對照組＝一直在自己市場進貨。別的市場的成本＝當天價÷(1−路上損耗)＋運費；
     那天那個市場沒開就只能在自己市場買。另算「固定去平常最便宜的市場」（每月初用前 90 天中位數挑一次，不用每天看 App）。
-    h_es：[(日期, 均價)]；others：{市場: [(日期, 均價)]}；acc：{運費: 累計}（就地累加）。回傳這個單位的 {運費: (省下比例, 天數)}。"""
+    h_es：[(日期, 均價)]；others：{市場: [(日期, 均價)]}；acc：{運費: 累計}（就地累加）；start：從哪天開始評估（預設 Y2_START）。
+    回傳這個單位的 {運費: (省下比例, 天數)}。"""
+    start = start or Y2_START
     oth = {mk: ([_ordinal(d) for d, _ in es], [p for _, p in es], dict(es)) for mk, es in others.items()}
     unit = {f: [0.0, 0.0, 0] for f in FREIGHTS}            # strat, base, n
     static_pick, static_month = {f: home for f in FREIGHTS}, None
     for i in range(len(h_es) - 1):
         (t, pt), (t1, p_home1) = h_es[i], h_es[i + 1]
-        if t < Y2_START:                                    # 與其他題同一段期間（第 2 年起）
+        if t < start:
             continue
         ot = _ordinal(t)
         if _ordinal(t1) - ot > FRESH_DAYS:                  # 長休市（過年）後不比：那時的「最新價」都是舊的
@@ -400,6 +402,10 @@ def eval_cross_market(markets, app_dir, ix):
             continue
         names = [m for m in REGIONS[region] if m in markets]
         mvars = load_region_variants(app_dir, ix, names)
+        # 評估期間固定在「2 年資料窗的第 2 年」：品種只存 2 年（不封存），母作物有 5 年封存；
+        # 兩種比法要用同一段期間才能比，也跟比價頁說明（CMP_BT_NOTE）的期間一致
+        vfirst = min((es[0][0] for cc in mvars.values() for vv in cc.values() for es in vv.values() if es), default=None)
+        e_start = max(Y2_START, iso_add(vfirst, 365)) if vfirst else Y2_START
         res = {}
         for level in ("parent", "variety"):
             acc = {f: {k: 0.0 for k in ("strat", "naive", "static", "oracle", "base")} | {"n": 0, "remote": 0, "hit": 0, "closed": 0}
@@ -424,7 +430,7 @@ def eval_cross_market(markets, app_dir, ix):
                     if len(h_es) < MIN_DAYS or not others:
                         continue
                     units += 1
-                    for f, (sv, n) in _simulate(home, h_es, others, acc).items():
+                    for f, (sv, n) in _simulate(home, h_es, others, acc, e_start).items():
                         if n >= 100:
                             per[f].append((name, sv, n))
             r = {}
@@ -439,7 +445,7 @@ def eval_cross_market(markets, app_dir, ix):
                         "median_unit": statistics.median(x[1] for x in per[f]) if per[f] else None}
             res[level] = r
         del mvars
-        out[home] = {"region": region, "others": [m for m in names if m != home], "res": res}
+        out[home] = {"region": region, "others": [m for m in names if m != home], "res": res, "start": e_start}
     return out
 
 
@@ -585,7 +591,7 @@ def report(app_dir, out_path, retail_path=None):
           "（例：高雄的韭菜混了很多韭菜黃，屏東多是白頭韭菜），看起來便宜很多其實是買到不同的東西。"
           "「同品種比」只比名稱相同的品種（排除「其他」「進口」），比較接近真的能省的錢；但同品種也可能等級不同，仍是上限。", ""]
     for home, r in E.items():
-        L += [f"**{home}**（同區比：{'、'.join(r['others'])}）", "",
+        L += [f"**{home}**（{r['start']} 起；同區比：{'、'.join(r['others'])}）", "",
               "| 比法 | 運費（元/公斤） | 去別的市場的天數 | 去了真的比較便宜 | 照 App 含運排名 | 不填運費只看最便宜 | 固定去平常最便宜的（每月挑一次） | 事後最佳（上限） |",
               "|---|---|---|---|---|---|---|---|"]
         for level, lname in (("parent", "全部綜合"), ("variety", "同品種")):

@@ -101,3 +101,14 @@ def test_logs_catalog_and_warns_on_unknown_names(tmp_path, monkeypatch, capsys):
     cap = capsys.readouterr()
     assert "::warning::" in cap.err and "名稱格式可能改了" in cap.err
     assert len(json.load(open("retail.json", encoding="utf-8"))["months"]) == len(MONTHS)   # 舊月份沒被清掉
+
+
+def test_variety_pick_is_deterministic():
+    """名稱含關鍵字的品種有好幾個時：完全相同優先、其次交易天數最多（不能取 dict 第一個，順序每次執行可能不同）。"""
+    base = {f"2025-01-{d:02d}": {"avg": 10.0} for d in range(1, 13)}
+    big = {f"2025-01-{d:02d}": {"avg": 30.0} for d in range(1, 21)}       # 20 天
+    small = {f"2025-01-{d:02d}": {"avg": 50.0} for d in range(1, 13)}     # 12 天
+    for v in ({"油麥菜水耕": small, "油麥菜": big}, {"油麥菜": big, "油麥菜水耕": small}):
+        assert fr.wholesale_monthly(base, "油麥", v) == {"2025-01": 30.0}
+    assert fr.wholesale_monthly(base, "油麥菜水耕", {"油麥菜": big, "油麥菜水耕": small}) == {"2025-01": 50.0}
+    assert fr.wholesale_monthly(base, "芥藍", {"油麥菜": big}) == {"2025-01": 10.0}   # 找不到就用母作物
