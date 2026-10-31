@@ -23,6 +23,9 @@ paths:
 - `scripts/backtest.py` A～F（E 跨市場進貨、F 零售參考價）→ `docs/backtest.md`；測試 `tests/test_backtest.py`。
 - 前端新函式：`digestHTML`（看板每日提示）、`closedNoteHTML`（今天休市）、`qrChip`（量能比）、`originHTML`（務農）、
   `retailHTML`／`mainVariety`／`freightPerKg`／`CMP_BT_NOTE`（進貨）。
+- 2026-10-31 晚：`tymap.js`＋`vendor/leaflet/`（兩支各一份、內容一致）＝颱風彩色地圖；`mainVar`（多品種卡主要品種）、
+  `nameHTML`／`Core.commonOf`（俗名）、`tyStatusText`／`tyRef`（颱風文字用使用者縣市）；測試 `tests/test_cwa.py`、
+  `tests/e2e/fixtures/typhoon_status_infa.json`（煙花颱風真實資料，e2e 驗地圖）。
 
 ## 這是什麼
 

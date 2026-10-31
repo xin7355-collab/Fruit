@@ -103,11 +103,19 @@
     - **5 年封存** `prices/archive/NN_YYYY.json`（只有務農，`ARCHIVE_YEARS=5`）：滑出 2 年窗的資料搬進去；回填有時間預算
       （手動觸發 update-prices.yml 的 `backfill_minutes`），每個「市場×年」做完就存進度。只給摘要與回測用，手機不下載。
     - 產地價、零售抓不到 → 保留舊檔、不寫空檔、黃燈警告，不擋行情更新。
+    - **看板不下貴賤判斷（使用者 2026-10-31 要求）**：卡片、今日提示、排序都不顯示「偏貴／偏便宜」、不說「適合出貨／多進」，
+      只留價格、較上週漲跌、成交量；詳細頁「比近 90 天中位數 ±X%」只寫數字。多品種卡（精準進貨）不用「綜合」均價，
+      改顯示主要品種（`mainVar`；後端摘要 `m`＝近 90 天成交量最大，跟作物同名的品種也算，例：香蕉）。
+    - 名稱旁俗名：`core.js` 的 `COMMON`（批發名→常用俗名），搜尋也比對它；只放比批發名常用的。
+    - **颱風地圖**：`tymap.js`（兩份一致）＋`vendor/leaflet/`（Leaflet 1.9.4，打開颱風詳情才載入）＋OpenStreetMap 底圖；
+      後端 `typhoon_status.json` 多了 `past`（近 5 天已發生路徑）、`now`（氣象署觀測位置）、`track[].r70`。
+      追蹤文字由前端依使用者縣市組（後端以雲林為準，不能直接顯示）。CWA 金鑰走 `Authorization` 標頭，被拒才改網址參數。
+    - 字級「大／特大」：操作列字級用 `min(rem, vw)` 封頂、卡片改上下排、`html{overflow-x:clip}`（整頁一變寬，彈窗 ✕ 會跑出畫面）。
   - **技能**：`.claude/skills/` 由 skl 的 app-bootstrap 安裝（清單見 `.claude/skills/.skl-vendor.json`）；
     更新：`python3 /tmp/skl/xin-toolkit/skills/app-bootstrap/scripts/bootstrap_app.py update --target .`。
 - **測試**：`pip install -r requirements-dev.txt && python -m pytest -q tests/`；`node --test tests/core.test.cjs`；
   `node tests/e2e/smoke.cjs`（iPhone 13 尺寸；`E2E_ROOT=<資料副本> E2E_SPLIT=1` 可驗新格式與品種延後載入）。CI：`.github/workflows/test.yml`。
-- **回測結論（2026-10，docs/backtest.md）**：往年同期判斷沒有勝過舊法 → 看板標籤維持「近 90 筆 ±10%」，往年同期只當補充；
+- **回測結論（2026-10，docs/backtest.md）**：往年同期判斷沒有勝過舊法、舊法命中率也只有 57～59% → 看板已不顯示貴賤標籤；
   季節低價多進貨平均多花 5% → 不做；採收預判 30 天誤差 ≈「價格不變」、區間命中 31% → App 上有誠實說明；搭配種法選菜勝過固定單作。
   跨市場進貨（同品種）：中部運費 2 元/公斤只省 0.3%、不填運費反虧；北部/高雄看似省 2 成但多半是等級不同 → 比價頁附說明。
   零售：批發×倍數誤差中位數 21%，直接用 1～6 個月前的零售價只有 8～15% → 零售卡先給零售價，倍數只當參考。
