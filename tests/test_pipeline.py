@@ -12,7 +12,7 @@ import importlib.util
 import json
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 import requests
@@ -138,25 +138,6 @@ def test_fetch_market_all_counts_failed_chunks(fp):
     recs, failed = fp.fetch_market_all("西螺", start, now, getter=get, sleep=lambda s: None)
     assert failed == 1 and len(recs) == 2
     assert n["i"] == 1 + 5 + 1                       # 第 2 段重試 4 次
-
-
-def test_write_split_stable_within_month_and_lossless(fp, tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    os.makedirs("prices")
-    data = {"甘藍": {"2026-09-29": {"avg": 1}, "2026-10-02": {"avg": 2}},
-            "芒果": {"2026-08-01": {"avg": 3}}}
-    variants = {"甘藍": {"初秋": {"2026-09-29": {"avg": 1}, "2026-10-02": {"avg": 2}}}}
-    t1 = datetime(2026, 10, 3, 9, tzinfo=fp.TZ)
-    t2 = datetime(2026, 10, 30, 15, tzinfo=fp.TZ)
-    recent = fp.write_split("prices/01.json", "西螺", t1, data, variants)
-    h1 = open("prices/01.json", "rb").read()
-    fp.write_split("prices/01.json", "西螺", t2, data, variants)
-    assert open("prices/01.json", "rb").read() == h1, "同月內歷史檔必須逐位元不變（否則 git 每天又整檔重寫）"
-    hist, rc = json.load(open("prices/01.json")), json.load(open(recent))
-    assert rc["since"] == "2026-10-01" and "updated" not in hist
-    merged = {c: {**hist["data"].get(c, {}), **rc["data"].get(c, {})} for c in data}
-    assert merged == data
-    assert {**hist["variants"]["甘藍"]["初秋"], **rc["variants"]["甘藍"]["初秋"]} == variants["甘藍"]["初秋"]
 
 
 def test_assign_file_keeps_numbers(fp):
@@ -289,3 +270,167 @@ def test_single_day_over_cap_marked_incomplete(fp):
     get = fake_capped_api(fp, per_day=12000)
     recs, failed = fp.fetch_market_all("台北一", day, day, getter=get, sleep=lambda s: None)
     assert failed == 1
+
+
+# ───────────────────────── price_core：彙整、檔案、判斷 ─────────────────────────
+@pytest.fixture(params=["farmer", "merchant"])
+def pc(request):
+    return load(request.param, "price_core")
+
+
+def test_price_core_two_copies_identical():
+    a = open(os.path.join(APPS["farmer"], "price_core.py"), "rb").read()
+    b = open(os.path.join(APPS["merchant"], "price_core.py"), "rb").read()
+    assert a == b, "scripts/price_core.py 與 merchant/scripts/price_core.py 必須保持一致"
+
+
+def agg(fp, pc, recs, dom_prev=()):
+    return pc.aggregate(recs, g=fp.g, norm_crop=fp.norm_crop, cat_by_code=fp.CAT_BY_CODE,
+                        skip_base=fp.SKIP_BASE, iso_from_roc=fp.iso_from_roc, dom_prev=dom_prev)
+
+
+def r2(fp, d, name, avg, qty, hi=None, lo=None, code="N04"):
+    return {"種類代碼": code, "作物名稱": name, "交易日期": fp.roc(d), "平均價": avg,
+            "上價": hi or avg, "中價": avg, "下價": lo or avg, "交易量": qty}
+
+
+def test_import_not_merged_into_domestic_parent(fp, pc):
+    d = datetime(2026, 10, 30)
+    mdata, variants, _, _, dom = agg(fp, pc, [
+        r2(fp, d, "草莓-豐香", 60, 1000), r2(fp, d, "草莓-進口", 190, 50),          # 國產＋進口
+        r2(fp, d + timedelta(days=1), "草莓-進口", 195, 40),                          # 只有進口的那天
+        r2(fp, d, "奇異果-進口", 80, 500, code="N05")])                               # 純進口作物
+    assert mdata["草莓"]["2026-10-30"]["avg"] == 60, "母作物只算國產"
+    assert "2026-10-31" not in mdata["草莓"], "國產作物不可用進口價補空"
+    assert set(variants["草莓"]) == {"豐香", "進口"}, "進口留在品種裡"
+    assert mdata["奇異果"]["2026-10-30"]["avg"] == 80, "純進口作物照樣顯示"
+    assert "草莓" in dom and "奇異果" not in dom
+
+
+def test_domestic_history_keeps_import_out_in_incremental_window(fp, pc):
+    d = datetime(2026, 10, 30)   # 增量窗內只有進口，但歷史上有國產 → 不可把進口價當母作物
+    mdata, _, _, _, _ = agg(fp, pc, [r2(fp, d, "草莓-進口", 190, 50)], dom_prev=["草莓"])
+    assert "草莓" not in mdata
+
+
+def test_high_low_are_volume_weighted(fp, pc):
+    d = datetime(2026, 10, 30)
+    mdata, _, _, _, _ = agg(fp, pc, [r2(fp, d, "甘藍-改良種", 28, 100000, hi=34, lo=20),
+                                     r2(fp, d, "甘藍-甘藍心", 120, 43, hi=120, lo=120)])
+    day = mdata["甘藍"]["2026-10-30"]
+    assert day["high"] < 40, f"冷門小品種不可把上價撐到 120（{day}）"
+    assert day["low"] <= day["mid"] <= day["high"]
+
+
+def test_closed_days_collected(fp, pc):
+    d = datetime(2026, 10, 26)
+    _, _, _, closed, _ = agg(fp, pc, [{"作物名稱": "休市", "交易日期": fp.roc(d), "平均價": 0, "交易量": 0},
+                                      r2(fp, d + timedelta(days=1), "甘藍-改良種", 28, 100)])
+    assert closed == {"2026-10-26"}
+
+
+def test_merge_series_overwrites_window_and_trims(pc):
+    old = {"甘藍": {"2024-09-01": {"avg": 1}, "2026-10-20": {"avg": 2}, "2026-10-29": {"avg": 3}}}
+    new = {"甘藍": {"2026-10-29": {"avg": 30}, "2026-10-30": {"avg": 31}}, "蘿蔔": {"2026-10-30": {"avg": 9}}}
+    m = pc.merge_series(old, new, keep_from="2024-10-01")
+    assert m["甘藍"] == {"2026-10-20": {"avg": 2}, "2026-10-29": {"avg": 30}, "2026-10-30": {"avg": 31}}
+    assert m["蘿蔔"] == {"2026-10-30": {"avg": 9}}
+
+
+def test_write_market_three_files_stable_and_lossless(fp, pc, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("prices")
+    data = {"甘藍": {"2026-09-29": {"avg": 1, "qty": 1}, "2026-10-02": {"avg": 2, "qty": 1}}}
+    variants = {"甘藍": {"初秋": {"2026-09-29": {"avg": 1}, "2026-10-02": {"avg": 2}}}}
+    t1, t2 = datetime(2026, 10, 3, 9, tzinfo=fp.TZ), datetime(2026, 10, 30, 15, tzinfo=fp.TZ)
+    p = pc.write_market("prices/01.json", "西螺", t1, data, variants, pc.summarize(data, variants))
+    h1, v1 = open(p["file"], "rb").read(), open(p["vfile"], "rb").read()
+    pc.write_market("prices/01.json", "西螺", t2, data, variants, pc.summarize(data, variants))
+    assert open(p["file"], "rb").read() == h1 and open(p["vfile"], "rb").read() == v1, "同月內歷史檔必須逐位元不變"
+    hist = json.load(open(p["file"]))
+    assert "variants" not in hist and "updated" not in hist, "歷史檔不放品種（品種另檔、點了才載）"
+    d2, v2 = pc.read_market({"name": "西螺", **p})
+    assert d2 == data and v2 == variants
+    assert "sum" in json.load(open(p["recent"]))
+
+
+def series_from(pairs):
+    return {d: {"avg": a, "qty": q} for d, a, q in pairs}
+
+
+def test_signal_tag_old_rule_with_season_ratio(pc):
+    # 每年 10 月便宜（20 元）、其他月份 40 元；今年 10 月 21 元 → 對往年同期是「正常」，舊法（近 90 筆）卻會說「偏便宜」
+    pairs, d = [], date(2024, 10, 1)
+    while d <= date(2026, 10, 30):
+        a = 21 if d.year == 2026 and d.month == 10 else (20 if d.month in (10, 11) else 40)
+        pairs.append((d.isoformat(), a, 1000))
+        d += timedelta(days=1)
+    s = pc.signal(series_from(pairs))
+    es = sorted(series_from(pairs).items())
+    assert s["t"] == pc.old_signal(es)[0] == "dn", "看板標籤沿用舊法（回測後未改）"
+    assert abs(s["sr"] - 1.05) < 0.01, f"比往年同期＝21/20（補充資訊）：{s}"
+    assert pc.season_signal(es) == ("mid", "s"), "往年同期判斷法（回測對照用）說「正常」"
+
+
+def test_signal_falls_back_when_no_history(pc):
+    pairs = [((date(2026, 8, 1) + timedelta(days=i)).isoformat(), 30 if i < 80 else 45, 1000) for i in range(90)]
+    s = pc.signal(series_from(pairs))
+    assert s["t"] == "up" and s["sr"] is None
+    assert pc.season_signal(sorted(series_from(pairs).items())) == ("up", "r")
+
+
+def test_week_change_and_thin(pc):
+    s = pc.signal(series_from([("2026-10-01", 10, 100), ("2026-10-20", 12, 100), ("2026-10-30", 15, 100)]))
+    assert s["w"] == 25.0 and s["q"] == 1        # 10/20 落在 7～11 天前；量 100 公斤 < 300 → 量少
+    s2 = pc.signal(series_from([("2026-09-01", 10, 5000), ("2026-10-30", 15, 5000)]))
+    assert s2["w"] is None and "q" not in s2     # 7～11 天前沒成交 → 不硬比
+
+
+def test_predict_price_respects_as_of(pc):
+    s = series_from([((date(2025, 1, 1) + timedelta(days=i)).isoformat(), 10 + (i > 400) * 90, 1) for i in range(640)])
+    # 2026-02-06 起價格跳到 100；as_of=2/1 時只准看到 10 元的資料
+    p = pc.predict_price(s, "2026-03-01", as_of="2026-02-01")
+    assert p["med"] == 10 and p["hi"] == 10, f"偷看到未來資料：{p}"
+    leak = pc.predict_price(s, "2026-03-01")
+    assert leak["hi"] == 100, "對照：不設 as_of 就會用到 2 月後的 100 元"
+
+
+# ───────────────────────── 增量抓取（整合） ─────────────────────────
+class FixedNow:
+    def __init__(self, fp, iso):
+        self.real, self.now_v = fp.datetime, datetime.fromisoformat(iso).replace(tzinfo=fp.TZ)
+
+    def install(self, monkeypatch, fp):
+        real, nv = self.real, self.now_v
+
+        class DT(real):
+            @classmethod
+            def now(cls, tz=None):
+                return nv
+        monkeypatch.setattr(fp, "datetime", DT)
+
+
+def test_incremental_fetch_merges_window(fp, pc, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("prices")
+    FixedNow(fp, "2026-10-30T09:00:00").install(monkeypatch, fp)
+    old = {"甘藍": {"2025-06-01": {"avg": 11.0, "high": 11.0, "mid": 11.0, "low": 11.0, "qty": 10}}}
+    paths = pc.write_market("prices/01.json", "台北一", datetime(2026, 10, 1, tzinfo=fp.TZ), old, {}, {})
+    json.dump({"fmt": fp.FMT, "markets": [{"name": "台北一", **paths, "dom": ["甘藍"], "closed": []}],
+               "categories": {"甘藍": "蔬菜"}, "latest": {}, "latest_var": {}},
+              open("prices_index.json", "w"), ensure_ascii=False)
+    monkeypatch.setattr(fp, "MARKETS", ["台北一"])
+    seen = []
+
+    def fake_fetch(market, start, end, getter=None, sleep=None):
+        seen.append((start.date().isoformat(), end.date().isoformat()))
+        return [r2(fp, datetime(2026, 10, 29), "甘藍-改良種", 25, 1000)], 0
+    monkeypatch.setattr(fp, "fetch_market_all", fake_fetch)
+    monkeypatch.setattr(sys, "argv", ["fetch_prices.py", "--days", "730"] +
+                        (["--no-discover"] if hasattr(fp, "resolve_markets") else []))
+    fp.main()
+    assert seen == [("2026-10-17", "2026-10-30")], f"平常只抓近 14 天：{seen}"
+    ix = json.load(open("prices_index.json"))
+    d, _ = pc.read_market(ix["markets"][0])
+    assert set(d["甘藍"]) == {"2025-06-01", "2026-10-29"}, "新抓的日子要併進舊資料、舊的保留"
+    assert ix["fmt"] == fp.FMT and ix["markets"][0]["vfile"].endswith("_v.json")

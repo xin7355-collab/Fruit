@@ -31,6 +31,10 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from http_retry import get_json, redact   # 指數退避重試（同目錄 http_retry.py）
+import price_core                          # 進口分開、量加權、往年同期判斷、檔案格式（同目錄 price_core.py）
+
+FMT = 2          # 檔案格式：2＝進口不併母作物、上下價量加權、品種拆檔(_v)、看板摘要(sum)。舊格式會自動整個重抓一次
+INCR_DAYS = 14   # 平常只重抓最近 14 天（含晚到的更正）併進舊資料；每月 1 日、格式變更或 --full 才整段重抓 2 年
 
 TZ = timezone(timedelta(hours=8))
 API = "https://data.moa.gov.tw/Service/OpenData/FromM/FarmTransData.aspx"
@@ -354,37 +358,6 @@ def assign_file(mk, file_map, used):
     return f"prices/{n:02d}.json"
 
 
-def split_series(series, cutoff_iso):
-    hist = {d: v for d, v in series.items() if d < cutoff_iso}
-    rec = {d: v for d, v in series.items() if d >= cutoff_iso}
-    return hist, rec
-
-
-def write_split(fname, mk, now, mdata, variants):
-    """寫出歷史檔＋當月檔，回傳當月檔名。"""
-    cutoff = month_start(now).strftime("%Y-%m-%d")
-    h_data, r_data, h_var, r_var = {}, {}, {}, {}
-    for crop, s in mdata.items():
-        h, r = split_series(s, cutoff)
-        if h: h_data[crop] = h
-        if r: r_data[crop] = r
-    for crop, vv in variants.items():
-        for lab, s in vv.items():
-            h, r = split_series(s, cutoff)
-            if h: h_var.setdefault(crop, {})[lab] = h
-            if r: r_var.setdefault(crop, {})[lab] = r
-    recent = fname[:-5] + "_recent.json"
-    # 歷史檔：sort_keys + 不放 updated → 同月內內容逐位元相同，git 不會產生新版本
-    with open(fname, "w", encoding="utf-8") as f:
-        json.dump({"market": mk, "until": cutoff, "data": h_data, "variants": h_var},
-                  f, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    with open(recent, "w", encoding="utf-8") as f:
-        json.dump({"market": mk, "updated": now.strftime("%Y-%m-%d %H:%M"), "since": cutoff,
-                   "data": r_data, "variants": r_var},
-                  f, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return recent
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=730)   # 近 2 年，讓採收預判/走勢更穩
@@ -394,6 +367,7 @@ def main():
                     help="只做市場探索：印出 API 實際回報的所有市場（含合作社/農會）後結束，不抓行情")
     ap.add_argument("--no-discover", action="store_true",
                     help="關閉動態探索，只抓靜態 MARKETS 清單（舊行為）")
+    ap.add_argument("--full", action="store_true", help="不用增量，整段重抓（預設每月 1 日自動整段重抓）")
     args = ap.parse_args()
 
     if args.probe:
@@ -416,95 +390,69 @@ def main():
     start = months_back_start(now, args.days)   # 對齊月初：同月內歷史檔內容固定
     old_index = load_old_index()
     file_map, used_files = file_map_of(old_index), set()
+    old_by_name = {m.get("name"): m for m in old_index.get("markets", [])}
+    # 整段重抓：手動 --full、每月 1 日（順便校正 API 事後修正的舊資料）、或舊檔格式不同
+    full_all = args.full or now.day == 1 or old_index.get("fmt") != FMT
+    keep_from = start.strftime("%Y-%m-%d")
+    print(f"[fetch_prices] 模式：{'整段重抓 ' + keep_from + ' 起' if full_all else f'增量（近 {INCR_DAYS} 天）'}")
     failed_markets, consecutive_fail = [], 0
     market_list = [(m, m) for m in MARKETS] if args.no_discover else resolve_markets(now)
 
     os.makedirs("prices", exist_ok=True)
-    index_markets, latest, latest_var, categories, total = [], {}, {}, {}, 0
+    index_markets, latest, latest_var, total = [], {}, {}, 0
+    categories = {} if full_all else dict(old_index.get("categories") or {})
     for mk, query in market_list:
         if consecutive_fail >= BREAKER_MARKETS:
             failed_markets.append(mk)       # 熔斷：API 看起來整個掛了，剩下的市場不再白等，沿用舊資料
             continue
-        recs, bad_chunks = fetch_market_all(query, start, now)
+        old_ent = old_by_name.get(mk)
+        old_data = old_var = None
+        if not full_all and old_ent:
+            old_data, old_var = price_core.read_market(old_ent)
+        incremental = old_data is not None
+        fstart = (now - timedelta(days=INCR_DAYS - 1)).replace(hour=0, minute=0, second=0, microsecond=0) \
+            if incremental else start
+        recs, bad_chunks = fetch_market_all(query, fstart, now)
         if bad_chunks:
             consecutive_fail += 1
             failed_markets.append(mk)
             print(f"::warning::[fetch_prices] {mk}：{bad_chunks} 段重試後仍失敗 → 本次不覆蓋，沿用上次資料", file=sys.stderr)
             continue
         consecutive_fail = 0
-        # 母作物 → 日 → 同日多品種明細；用種類代碼自動分類、跳過花卉/休市/0 元
-        # varser：保留「每個品種」的完整歷史序列（供前端點品種看它自己的 K 線）
-        agg, cat, varser = {}, {}, {}
-        for rec in recs:
-            c = CAT_BY_CODE.get(str(g(rec, "種類代碼", "TcType") or ""))
-            if not c:
-                continue
-            full = str(g(rec, "作物名稱", "CropName") or "")
-            base = norm_crop(full)
-            if not base or base in SKIP_BASE or base.startswith("其他"):
-                continue
-            iso = iso_from_roc(str(g(rec, "交易日期", "TransDate") or ""))
-            av = g(rec, "平均價", "Avg_Price")
-            if not iso or av is None:
-                continue
-            try:
-                a = float(av)
-            except (TypeError, ValueError):
-                continue
-            if a <= 0:
-                continue
-            hi = float(g(rec, "上價", "Upper_Price") or a)
-            md = float(g(rec, "中價", "Middle_Price") or a)
-            lo = float(g(rec, "下價", "Lower_Price") or a)
-            qty = float(g(rec, "交易量", "Trans_Quantity") or 0)
-            agg.setdefault(base, {}).setdefault(iso, []).append((a, hi, lo, qty, md))
-            cat[base] = c
-            varser.setdefault(base, {}).setdefault(full, {}).setdefault(iso, []).append((a, hi, lo, qty, md))
-
-        def _day(lst):
-            tq = sum(x[3] for x in lst)
-            avg = (sum(x[0] * x[3] for x in lst) / tq) if tq > 0 else (sum(x[0] for x in lst) / len(lst))
-            mid = (sum(x[4] * x[3] for x in lst) / tq) if tq > 0 else (sum(x[4] for x in lst) / len(lst))
-            return {"avg": round(avg, 1), "high": round(max(x[1] for x in lst), 1),
-                    "mid": round(mid, 1), "low": round(min(x[2] for x in lst), 1), "qty": round(tq)}
-
-        # 收斂：同日多品種 → 量加權均/中價、量加總、上價取 max、下價取 min
-        mdata = {crop: {iso: _day(lst) for iso, lst in days.items()} for crop, days in agg.items()}
-        # 品種明細（≥2 個品種才存；標籤取「-」後的品種名）；每品種存完整逐日序列供 K 線
-        variants = {}
-        for crop, fulls in varser.items():
-            if len(fulls) < 2:
-                continue
-            vv = {}
-            for full, days in fulls.items():
-                label = (full.split("-", 1)[1].strip() if "-" in full else full) or "一般"
-                vv[label] = {iso: _day(lst) for iso, lst in days.items()}
-            variants[crop] = vv
-        if not mdata:
+        mdata_w, var_w, cat, closed_w, dom = price_core.aggregate(
+            recs, g=g, norm_crop=norm_crop, cat_by_code=CAT_BY_CODE, skip_base=SKIP_BASE,
+            iso_from_roc=iso_from_roc, dom_prev=(old_ent or {}).get("dom", []) if incremental else ())
+        if not mdata_w:
             if mk in file_map:   # 上次有資料、這次 0 筆 ＝ API 異常（維護時常回空陣列），不是真的沒交易
                 failed_markets.append(mk)
                 print(f"::warning::[fetch_prices] {mk}：這次 0 筆但上次有資料 → 視為 API 異常，沿用上次資料", file=sys.stderr)
             else:
                 print(f"[fetch_prices] {mk}：無資料，略過。", file=sys.stderr)
             continue
+        if incremental:   # 新抓的日子覆蓋舊的（含 API 事後更正），其餘保留；超過 2 年窗的丟掉
+            mdata = price_core.merge_series(old_data, mdata_w, keep_from)
+            variants = price_core.merge_variants(old_var, var_w, keep_from)
+            closed = set(closed_w) | set((old_ent or {}).get("closed", []))
+        else:
+            mdata, variants, closed = mdata_w, var_w, closed_w
         fname = assign_file(mk, file_map, used_files)
         used_files.add(fname)
-        recent = write_split(fname, mk, now, mdata, variants)
-        index_markets.append({"name": mk, "file": fname, "recent": recent})
+        paths = price_core.write_market(fname, mk, now, mdata, variants, price_core.summarize(mdata, variants))
+        index_markets.append({"name": mk, **paths, "dom": sorted(dom), "closed": price_core.trim_closed(closed, now)})
         latest[mk] = {c: _latest_valid(s) for c, s in mdata.items()}
         # 各品種最新價（供跨市場比價「品種細部」）：{作物:{品種:latest}}
-        if variants:
-            lv = {}
-            for crop, vv in variants.items():
-                d = {lab: _latest_valid(s) for lab, s in vv.items()}
-                d = {lab: v for lab, v in d.items() if v}
-                if d:
-                    lv[crop] = d
-            if lv:
-                latest_var[mk] = lv
+        lv = {}
+        for crop, vv in variants.items():
+            d = {lab: _latest_valid(s) for lab, s in vv.items()}
+            d = {lab: v for lab, v in d.items() if v}
+            if d:
+                lv[crop] = d
+        if lv:
+            latest_var[mk] = lv
         categories.update(cat)
         total += sum(len(s) for s in mdata.values())
-        print(f"[fetch_prices] {mk}：{len(mdata)} 種、{sum(len(s) for s in mdata.values())} 筆 → {fname}")
+        print(f"[fetch_prices] {mk}：{'增量 ' + str(len(mdata_w)) + ' 種／' if incremental else ''}"
+              f"{len(mdata)} 種、{sum(len(s) for s in mdata.values())} 筆 → {fname}")
 
     carried = carry_forward(old_index, failed_markets, index_markets, latest, latest_var, categories)
     fetched = len(index_markets) - len(carried)
@@ -518,6 +466,7 @@ def main():
 
     crop_map = {c: c for c in categories}   # 展示名＝批發名＝母作物（API 驅動，免人工對照）
     index = {"updated": now.strftime("%Y-%m-%d %H:%M"),
+             "fmt": FMT,
              "years_back": round(args.days / 365, 1),
              "crop_map": crop_map,
              "categories": categories,   # {作物: 蔬菜|水果}（種類代碼自動分類）
