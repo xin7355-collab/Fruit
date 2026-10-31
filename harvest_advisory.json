@@ -1,11 +1,11 @@
 {
-  "updated": "2026-10-31 17:43",
+  "updated": "2026-10-31 18:12",
   "typhoon": {
-    "name": null,
-    "warning": null,
-    "invade_prob": null,
-    "eta_text": null,
-    "rain_24h_mm": null,
+    "name": "煙花",
+    "warning": "追蹤中，對雲林暫無直接威脅",
+    "invade_prob": 0.0,
+    "eta_text": "追蹤中",
+    "rain_24h_mm": 0.0,
     "active": false
   },
   "region": {
@@ -21,7 +21,7 @@
       "decision": "NORMAL",
       "confidence": 0.8,
       "risk_score": 0,
-      "maturity": 4.204,
+      "maturity": 4.205,
       "flood_potential_level": 4,
       "harvest_deadline": null,
       "dilemma": null,
@@ -79,7 +79,7 @@
       "decision": "NORMAL",
       "confidence": 0.8,
       "risk_score": 0,
-      "maturity": 3.414,
+      "maturity": 3.415,
       "flood_potential_level": 2,
       "harvest_deadline": null,
       "dilemma": null,
