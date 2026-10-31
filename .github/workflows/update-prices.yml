@@ -63,3 +63,23 @@ jobs:
             done
             [ "$ok" = 1 ] || { echo "::error::push 連續失敗"; exit 1; }
           fi
+
+      - name: 還原行情推播去重狀態
+        uses: actions/cache@v4
+        with:
+          path: notify_price_state.json
+          key: notify-price-state-${{ github.run_id }}
+          restore-keys: |
+            notify-price-state-
+
+      # 放在提交之後：推播壞掉（例如 LINE token 錯）會亮紅燈通知你，但不影響行情已經更新。
+      # 關注品項用 repo 的 Variables 設定（Settings → Secrets and variables → Actions → Variables）：
+      #   NOTIFY_PRICE_CROPS＝甘藍,小白菜（逗號分隔）、NOTIFY_PRICE_MARKET＝西螺；沒設就安靜略過。
+      - name: 行情推播（關注品項偏貴／偏便宜）
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_TO: ${{ secrets.LINE_TO }}
+          NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+          NOTIFY_PRICE_MARKET: ${{ vars.NOTIFY_PRICE_MARKET }}
+          NOTIFY_PRICE_CROPS: ${{ vars.NOTIFY_PRICE_CROPS }}
+        run: python3 scripts/notify.py --prices --state notify_price_state.json

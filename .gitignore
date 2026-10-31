@@ -17,3 +17,4 @@ notify_state.json
 .pytest_cache/
 test-results/
 node_modules/
+notify_price_state.json
