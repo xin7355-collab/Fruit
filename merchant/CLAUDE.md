@@ -16,6 +16,16 @@
     `prices/NN_recent.json`＝本月逐日（小檔每日更新）；index 的 `markets[].recent` 指向當月檔，前端 `loadMarket`
     並行抓兩檔用 `mergeSeries` 合併。檔號沿用舊 index 的「市場名→檔名」不再依排序跳號。目的：止住 git 歷史每天暴增。
   - 天氣排程兩支都有「預報抓成空就還原、不覆蓋」守門（未設 `CWA_API_KEY` 時保護既有資料）。
+  - **農業部 API 單次最多回 9999 筆**（回滿＝被截斷，API 不報錯）：`fetch_market_all` 回滿就整批丟棄、縮短區段重抓
+    （2026-10-31 前大市場每 91 天只留最後 3～5 週，台中 2 年只剩 215 個交易日）。改抓法時務必保留這個偵測與測試。
+  - 抓資料一律走 `scripts/http_retry.py`（2/4/8/16 秒指數退避；兩份內容須一致，測試會比對）。某市場抓不完整
+    → 不覆蓋、沿用上次 index 條目；全部失敗 → 不寫檔 exit 1；連續 3 市場失敗熔斷。`notify.py` 刻意不重試（避免重複推播）。
+  - 前端 JSON 一律 `cache:"no-cache"`（ETag 304，不要改回 no-store：每次開 App 會重抓 3～5MB）。
+  - 精準進貨比價只採計最新成交日前 `CMP_FRESH_DAYS`(4) 天內的報價，舊價排最後標「舊價」。
+- **測試（改程式後必跑）**：`pip install -r requirements-dev.txt && python -m pytest -q tests/`（離線、兩支 App 都測）；
+  `node tests/e2e/smoke.cjs`（iPhone 13 尺寸冒煙，截圖在 test-results/）。CI：`.github/workflows/test.yml`。
+- **技能**：`.claude/skills/` 由 skl 的 app-bootstrap 安裝（清單見 `.claude/skills/.skl-vendor.json`）；
+  更新：`python3 /tmp/skl/xin-toolkit/skills/app-bootstrap/scripts/bootstrap_app.py update --target .`。
 
 ## ⚑ 這個 repo 是「精準進貨」商人版專用
 
