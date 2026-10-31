@@ -60,14 +60,14 @@ def cwa_get(dataid, **params):
         return None
     url = f"{BASE}/{dataid}"
     params = {"Authorization": key, "format": "JSON", **params}
+    from http_retry import get_json, redact   # 延遲載入：沒裝 requests 時上面已提早 return
     try:
-        r = requests.get(url, params=params, timeout=30)
-        r.raise_for_status()
-        j = r.json()
+        # 逾時/5xx/429 指數退避重試；404 等 4xx 不重試（資料集代碼異動時立刻換下一個）
+        j = get_json(url, params=params, timeout=30, label=dataid)
         # CWA 慣例：{ success, records: {...} }
         return j.get("records")
     except Exception as e:
-        print(f"[fetch_cwa] {dataid} 抓取失敗：{e}", file=sys.stderr)
+        print(f"[fetch_cwa] {dataid} 抓取失敗：{redact(e)}", file=sys.stderr)   # 遮蔽網址中的金鑰
         return None
 
 

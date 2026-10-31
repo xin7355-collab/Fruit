@@ -42,10 +42,10 @@ def moa_get(unit_id):
     if requests is None:
         return None
     url = f"{BASE}?UnitId={unit_id}&IsTransData=1"
+    from http_retry import get_json, redact   # 延遲載入：沒裝 requests 時上面已提早 return
     try:
-        r = requests.get(url, timeout=40, headers={"User-Agent": "Mozilla/5.0 nongshang-radar"})
-        r.raise_for_status()
-        j = r.json()
+        j = get_json(url, timeout=40, headers={"User-Agent": "Mozilla/5.0 nongshang-radar"},
+                     label=f"UnitId={unit_id}")
         if isinstance(j, dict):                      # 有些包一層
             for v in j.values():
                 if isinstance(v, list):
@@ -53,7 +53,7 @@ def moa_get(unit_id):
             return None
         return j if isinstance(j, list) else None
     except Exception as e:
-        print(f"[fetch_yield] UnitId={unit_id} 抓取失敗：{e}", file=sys.stderr)
+        print(f"[fetch_yield] UnitId={unit_id} 抓取失敗：{redact(e)}", file=sys.stderr)
         return None
 
 

@@ -1,0 +1,3 @@
+# 開發/測試用（CI 與本機）：版本固定，避免上游改版讓測試無預警壞掉
+-r scripts/requirements.txt
+pytest==8.4.2

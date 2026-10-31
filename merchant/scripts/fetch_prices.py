@@ -23,6 +23,8 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
+from http_retry import get_json, redact   # 指數退避重試（同目錄 http_retry.py）
+
 TZ = timezone(timedelta(hours=8))
 API = "https://data.moa.gov.tw/Service/OpenData/FromM/FarmTransData.aspx"
 UA = {"User-Agent": "Mozilla/5.0 (compatible; erlun-veg-advisory/1.0)"}
@@ -117,12 +119,7 @@ def _latest_valid(series):
 
 def fetch(market, crop, start, end):
     params = {"StartDate": roc(start), "EndDate": roc(end), "Market": market, "Crop": crop}
-    r = requests.get(API, params=params, headers=UA, timeout=60)
-    r.raise_for_status()
-    try:
-        j = r.json()
-    except Exception:
-        return []
+    j = get_json(API, params=params, headers=UA, timeout=60, label=f"{market}/{crop}")
     # 可能是 list，或包在 {"data":[...]} / {"RS":[...]}
     if isinstance(j, list):
         return j
@@ -136,9 +133,7 @@ def probe(market):
     用來確認 (1) API 支不支援『不帶 Crop』(2) 每筆有沒有『種類/分類』欄位，決定分類走法。"""
     now = datetime.now(TZ)
     params = {"StartDate": roc(now - timedelta(days=14)), "EndDate": roc(now), "Market": market}
-    r = requests.get(API, params=params, headers=UA, timeout=60)
-    r.raise_for_status()
-    j = r.json()
+    j = get_json(API, params=params, headers=UA, timeout=60, label=f"probe {market}")
     recs = j if isinstance(j, list) else (j.get("data") or j.get("RS") or j.get("Data") or [])
     crops = sorted({str(g(x, "作物名稱", "CropName") or "") for x in recs})
     by_code = {}
@@ -159,24 +154,26 @@ def probe(market):
     print(f"[probe] {market}：{len(recs)} 筆、{len(crops)} 種作物；欄位={out['sample_keys']}")
 
 
-def fetch_market_all(market, start, end):
+def fetch_market_all(market, start, end, getter=None, sleep=time.sleep):
     """逐市場、不帶作物名、分季抓（避免單次回應過大）→ 回傳該市場所有原始 records。
-    17 市場 × 8 季 ≈ 136 次請求（vs 逐品項 1400+），快且完全不漏品項。"""
-    out, cur = [], start
+    17 市場 × 8 季 ≈ 136 次請求（vs 逐品項 1400+），快且完全不漏品項。
+    回傳 (records, failed)：failed＝重試後仍失敗的段數。>0 代表這個市場資料有缺口，
+    呼叫端不可拿來覆蓋舊檔（否則 K 線會少一季、90 日中位數失真）。"""
+    out, cur, failed = [], start, 0
     while cur <= end:
         ce = min(cur + timedelta(days=90), end)
         params = {"StartDate": roc(cur), "EndDate": roc(ce), "Market": market}
         try:
-            r = requests.get(API, params=params, headers=UA, timeout=180)
-            r.raise_for_status()
-            j = r.json()
+            j = get_json(API, params=params, headers=UA, timeout=180, getter=getter, sleep=sleep,
+                         label=f"{market} {roc(cur)}~{roc(ce)}")
             recs = j if isinstance(j, list) else (j.get("data") or j.get("RS") or j.get("Data") or [])
             out.extend(recs)
         except Exception as e:
-            print(f"[fetch_prices] {market} {roc(cur)}~{roc(ce)} 失敗：{e}", file=sys.stderr)
+            failed += 1
+            print(f"[fetch_prices] {market} {roc(cur)}~{roc(ce)} 重試後仍失敗：{redact(e)}", file=sys.stderr)
         cur = ce + timedelta(days=1)
-        time.sleep(0.3)
-    return out
+        sleep(0.3)
+    return out, failed
 
 
 
@@ -195,6 +192,43 @@ def month_start(dt):
 def months_back_start(now, days):
     """抓取起日：往回 `days` 天後再對齊到該月 1 號 → 同一個月內起日固定，歷史檔才會穩定不變。"""
     return month_start(now - timedelta(days=days))
+
+
+BREAKER_MARKETS = 3   # 連續 3 個市場都抓不完整 → 判定 API 故障、熔斷
+
+
+def load_old_index(path="prices_index.json"):
+    try:
+        with open(path, encoding="utf-8") as f:
+            j = json.load(f)
+        return j if isinstance(j, dict) else {}
+    except Exception:
+        return {}
+
+
+def file_map_of(old_index):
+    return {m["name"]: m["file"] for m in old_index.get("markets", []) if m.get("name") and m.get("file")}
+
+
+def carry_forward(old_index, failed_markets, index_markets, latest, latest_var, categories):
+    """抓失敗的市場：沿用上次 index 的條目（檔案也沒被覆蓋），而不是從清單消失。回傳實際沿用的市場名。"""
+    old = {m.get("name"): m for m in old_index.get("markets", [])}
+    have = {m["name"] for m in index_markets}
+    carried = []
+    for mk in failed_markets:
+        ent = old.get(mk)
+        if not ent or mk in have or not os.path.exists(ent.get("file", "")):
+            continue
+        index_markets.append(ent)
+        if mk in (old_index.get("latest") or {}):
+            latest[mk] = old_index["latest"][mk]
+        if mk in (old_index.get("latest_var") or {}):
+            latest_var[mk] = old_index["latest_var"][mk]
+        for c in (latest.get(mk) or {}):
+            if c in (old_index.get("categories") or {}):
+                categories.setdefault(c, old_index["categories"][c])
+        carried.append(mk)
+    return carried
 
 
 def load_file_map():
@@ -260,12 +294,24 @@ def main():
 
     now = datetime.now(TZ)
     start = months_back_start(now, args.days)   # 對齊月初：同月內歷史檔內容固定
-    file_map, used_files = load_file_map(), set()
+    old_index = load_old_index()
+    file_map, used_files = file_map_of(old_index), set()
+    failed_markets, consecutive_fail = [], 0
 
     os.makedirs("prices", exist_ok=True)
     index_markets, latest, latest_var, categories, total = [], {}, {}, {}, 0
     for mk in MARKETS:
-        recs = fetch_market_all(mk, start, now)
+        query = mk
+        if consecutive_fail >= BREAKER_MARKETS:
+            failed_markets.append(mk)       # 熔斷：API 看起來整個掛了，剩下的市場不再白等，沿用舊資料
+            continue
+        recs, bad_chunks = fetch_market_all(query, start, now)
+        if bad_chunks:
+            consecutive_fail += 1
+            failed_markets.append(mk)
+            print(f"::warning::[fetch_prices] {mk}：{bad_chunks} 段重試後仍失敗 → 本次不覆蓋，沿用上次資料", file=sys.stderr)
+            continue
+        consecutive_fail = 0
         # 母作物 → 日 → 同日多品種明細；用種類代碼自動分類、跳過花卉/休市/0 元
         # varser：保留「每個品種」的完整歷史序列（供前端點品種看它自己的 K 線）
         agg, cat, varser = {}, {}, {}
@@ -315,7 +361,11 @@ def main():
                 vv[label] = {iso: _day(lst) for iso, lst in days.items()}
             variants[crop] = vv
         if not mdata:
-            print(f"[fetch_prices] {mk}：無資料，略過。", file=sys.stderr)
+            if mk in file_map:   # 上次有資料、這次 0 筆 ＝ API 異常（維護時常回空陣列），不是真的沒交易
+                failed_markets.append(mk)
+                print(f"::warning::[fetch_prices] {mk}：這次 0 筆但上次有資料 → 視為 API 異常，沿用上次資料", file=sys.stderr)
+            else:
+                print(f"[fetch_prices] {mk}：無資料，略過。", file=sys.stderr)
             continue
         fname = assign_file(mk, file_map, used_files)
         used_files.add(fname)
@@ -335,6 +385,16 @@ def main():
         categories.update(cat)
         total += sum(len(s) for s in mdata.values())
         print(f"[fetch_prices] {mk}：{len(mdata)} 種、{sum(len(s) for s in mdata.values())} 筆 → {fname}")
+
+    carried = carry_forward(old_index, failed_markets, index_markets, latest, latest_var, categories)
+    fetched = len(index_markets) - len(carried)
+    if fetched == 0:
+        print("::error::[fetch_prices] 本次沒有任何市場完整抓到（API 可能整個掛了）→ 不寫出任何檔案，保留上次資料。",
+              file=sys.stderr)
+        sys.exit(1)
+    if failed_markets:
+        print(f"::warning::[fetch_prices] 本次 {len(failed_markets)} 個市場未完整抓到：{'、'.join(failed_markets)}；"
+              f"其中 {len(carried)} 個沿用上次資料：{'、'.join(carried) or '（無舊資料可沿用）'}", file=sys.stderr)
 
     crop_map = {c: c for c in categories}   # 展示名＝批發名＝母作物（API 驅動，免人工對照）
     index = {"updated": now.strftime("%Y-%m-%d %H:%M"),

@@ -12,3 +12,8 @@ data/fields.json
 
 # 通知去重狀態（workflow 用 actions/cache 保存，不入庫）
 notify_state.json
+
+# 測試暫存
+.pytest_cache/
+test-results/
+node_modules/
