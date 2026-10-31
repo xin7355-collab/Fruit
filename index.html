@@ -748,11 +748,17 @@
 
 <script>
 /* ══════ 基礎 ══════ */
-const VERSION="v1.0.7";
+const VERSION="v1.0.8";
 /* 版本更新紀錄（最新在最上面）。未來每次改版就在陣列最前面新增一筆：
    {v:版本, date:"YYYY-MM-DD", title:"一句話重點", items:[本次更新條列…]}。
    會顯示在「設定→關於 App→更新內容」。 */
 const CHANGELOG=[
+  {v:"v1.0.8", date:"2026-10-31", title:"備份匯出修正＋資料更新更穩 🔧", items:[
+    "【修正】iPhone「設定→資料備份→匯出」改用純檔案分享，避免 iOS 只傳出文字、備份檔沒存到。",
+    "【改善】再次打開 App 不再重複下載沒變的行情資料，省手機流量、開得更快。",
+    "【修正】台北一、台中、高雄等大市場的歷史行情補齊（以前每段只抓到最後幾週，K 線、偏貴/偏便宜與採收預判因此失準）。",
+    "【改善】行情資料更新更穩：政府資料暫時連不上時會自動重試，失敗的市場沿用上次資料、不會整站變示範資料。",
+  ]},
   {v:"v1.0.7", date:"2026-10-31", title:"搬家到新網址＋行情載入更穩 🏠", items:[
     "【搬家】精準務農改放在新網址；舊的主畫面捷徑請刪掉、用新網址重新「加入主畫面」。",
     "【提醒】搬家後設定會回到預設；請到 設定→資料備份→匯入，選舊的備份檔即可還原。",
@@ -942,7 +948,7 @@ function cropCats(){return (INDEX&&INDEX.categories)||{};}
 const FRUIT_FALLBACK=new Set(["香蕉","鳳梨","西瓜","木瓜","芒果","蓮霧","芭樂","番石榴","葡萄","柳丁","椪柑","火龍果","荔枝","龍眼","番茄","釋迦","梨","桃","李","柚","文旦","甜柿","棗","楊桃","哈密瓜","香瓜","荖葉","草莓","百香果","酪梨","蘋果"]);
 function cropCat(disp){const c=cropCats()[disp];if(c)return c;for(const f of FRUIT_FALLBACK)if(disp.includes(f))return "水果";return "蔬菜";}
 async function loadIndex(){
-  try{const r=await fetch(`${resolveGhBase()}/prices_index.json`,{cache:"no-store"});if(!r.ok)throw 0;
+  try{const r=await fetch(`${resolveGhBase()}/prices_index.json`,{cache:"no-cache"});if(!r.ok)throw 0;
     const j=await r.json();if(!j||!j.crop_map||!Array.isArray(j.markets)||!j.markets.length)throw 0;
     j._live=true;return {index:j,live:true};}catch(e){return {index:demoIndex(),live:false};}}
 function mergeSeries(dst,src){if(!src||typeof src!=="object")return;for(const c in src){if(src[c]&&typeof src[c]==="object")dst[c]=Object.assign(dst[c]||{},src[c]);}}
@@ -950,28 +956,30 @@ async function loadMarket(mk){
   if(MDATA[mk])return MDATA[mk];
   const ent=((INDEX&&INDEX.markets)||[]).find(m=>m.name===mk);
   if(INDEX&&INDEX._live&&ent&&ent.file){
-    /* 行情切成「歷史檔(ent.file)＋當月檔(ent.recent)」兩支並行抓再合併；當月檔失敗/不存在只用歷史，不白畫面 */
+    /* 行情切成「歷史檔(ent.file)＋當月檔(ent.recent)」兩支並行抓再合併；當月檔失敗/不存在只用歷史，不白畫面 
+       JSON 一律 cache:"no-cache"：每次都向伺服器確認(ETag)，沒變就回 304 不重下載——歷史檔一個月才變一次，
+       以前用 no-store 每次開 App 都重抓 3～5MB（量測：第二次開啟 5.38MB → 0MB）。 */
     try{const base=resolveGhBase();
-      const [r,r2]=await Promise.all([fetch(`${base}/${ent.file}`,{cache:"no-store"}),
-        ent.recent?fetch(`${base}/${ent.recent}`,{cache:"no-store"}).catch(()=>null):Promise.resolve(null)]);
+      const [r,r2]=await Promise.all([fetch(`${base}/${ent.file}`,{cache:"no-cache"}),
+        ent.recent?fetch(`${base}/${ent.recent}`,{cache:"no-cache"}).catch(()=>null):Promise.resolve(null)]);
       if(r.ok){const j=await r.json();const d=(j&&j.data)||{},v=(j&&j.variants)||{};
         try{if(r2&&r2.ok){const k=await r2.json();mergeSeries(d,k&&k.data);
           const kv=(k&&k.variants)||{};for(const c in kv){v[c]=v[c]||{};mergeSeries(v[c],kv[c]);}}}catch(e){}
         MDATA[mk]=d;MVAR[mk]=v;return MDATA[mk];}}catch(e){}}
   MDATA[mk]=demoMarketData(mk);MVAR[mk]={};return MDATA[mk];}
 async function loadWeather(){
-  try{const r=await fetch(`${resolveGhBase()}/typhoon_status.json`,{cache:"no-store"});if(!r.ok)throw 0;
+  try{const r=await fetch(`${resolveGhBase()}/typhoon_status.json`,{cache:"no-cache"});if(!r.ok)throw 0;
     const j=await r.json();return (j&&typeof j==="object")?j:{active:false};}catch(e){return {active:false};}}
 async function loadForecast(){
-  try{const r=await fetch(`${resolveGhBase()}/weather_forecast.json`,{cache:"no-store"});if(!r.ok)throw 0;
+  try{const r=await fetch(`${resolveGhBase()}/weather_forecast.json`,{cache:"no-cache"});if(!r.ok)throw 0;
     const j=await r.json();return (j&&j.counties&&typeof j.counties==="object")?j:{counties:{}};}catch(e){return {counties:{}};}}
 async function loadYield(){
   // 各縣市每公頃單產（農業部生產概況，後端排程產出）；抓不到就 null，前端退回內建估算值
-  try{const r=await fetch(`${resolveGhBase()}/yield_index.json`,{cache:"no-store"});if(!r.ok)throw 0;
+  try{const r=await fetch(`${resolveGhBase()}/yield_index.json`,{cache:"no-cache"});if(!r.ok)throw 0;
     const j=await r.json();return (j&&(j.counties||j.national))?j:null;}catch(e){return null;}}
 async function loadEvents(){
   // 真實天氣事件（颱風/大雨/低溫），由後端 fetch_cwa.py 逐日累積；抓不到就空、K線只顯示節慶/爆量
-  try{const r=await fetch(`${resolveGhBase()}/weather_events.json`,{cache:"no-store"});if(!r.ok)throw 0;
+  try{const r=await fetch(`${resolveGhBase()}/weather_events.json`,{cache:"no-cache"});if(!r.ok)throw 0;
     const j=await r.json();const arr=Array.isArray(j)?j:(j&&j.events);if(!Array.isArray(arr))throw 0;
     const m={};arr.forEach(e=>{if(e&&e.date&&e.type){(m[e.date]=m[e.date]||[]).push(e);}});return m;}catch(e){return {};}}
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -2182,7 +2190,7 @@ async function exportData(){const txt=JSON.stringify(collectBackup(),null,2);
   const d=new Date();const fn=`${APP_NAME}備份_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.json`;
   const blob=new Blob([txt],{type:"application/json"});
   try{const file=new File([blob],fn,{type:"application/json"});
-    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:APP_NAME+"備份"});return;}}
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});return;}}
   catch(e){if(e&&e.name==="AbortError")return;}
   const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=fn;
   document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1200);
