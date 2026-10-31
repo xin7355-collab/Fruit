@@ -16,6 +16,14 @@ paths:
 
 > 原 CLAUDE.md 標題：精準務農（原「農商雷達／豐雨無阻／二崙葉菜行情室」）＋ 颱風搶收預判系統。給未來 Claude 工作階段的專案指引。
 
+## 2026-10-31 新增的檔案（較新，以這段為準）
+
+- `scripts/fetch_origin.py` → `origin.json`（務農詳細頁「產地價」）；`merchant/scripts/fetch_retail.py` → `merchant/retail.json`（進貨詳細頁「零售參考」）。
+- `prices/archive/NN_YYYY.json`：5 年封存（務農），`price_core.add_to_archive`／`read_market(with_archive=True)`；手機不讀。
+- `scripts/backtest.py` A～F（E 跨市場進貨、F 零售參考價）→ `docs/backtest.md`；測試 `tests/test_backtest.py`。
+- 前端新函式：`digestHTML`（看板每日提示）、`closedNoteHTML`（今天休市）、`qrChip`（量能比）、`originHTML`（務農）、
+  `retailHTML`／`mainVariety`／`freightPerKg`／`CMP_BT_NOTE`（進貨）。
+
 ## 這是什麼
 
 雲林二崙／西螺葉菜農的兩件事，放在同一個純前端站台（GitHub Pages）：

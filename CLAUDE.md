@@ -74,7 +74,8 @@
   **Variables**（選配，行情推播）：`NOTIFY_PRICE_CROPS`（例：甘藍,小白菜）、`NOTIFY_PRICE_MARKET`（預設 西螺）。
 - **主要檔案**：`index.html`／`merchant/index.html`（單檔 App）、`core.js`（兩支共用演算法，兩份須一致）、
   `scripts/fetch_prices.py`＋`scripts/price_core.py`＋`scripts/http_retry.py`（行情管線，merchant/scripts 有同名副本）、
-  `scripts/fetch_cwa.py`、`scripts/notify.py`、`scripts/backtest.py`（回測，結果在 `docs/backtest.md`）。
+  `scripts/fetch_cwa.py`、`scripts/notify.py`、`scripts/backtest.py`（回測，結果在 `docs/backtest.md`）、
+  `scripts/fetch_origin.py`（產地價→`origin.json`，務農）、`merchant/scripts/fetch_retail.py`（臺北市零售→`merchant/retail.json`）。
   細節：`.claude/rules/structure.md`（檔案結構）、`decision-model.md`（搶收模型）、`history.md`（版本沿革），改到相關檔案時自動載入。
 - **特別注意（踩過的坑，不要改回去）**：
   本 repo 同時放兩支 App（由 2026-08-08 備份還原）：
@@ -95,14 +96,21 @@
       → 不覆蓋、沿用上次 index 條目；全部失敗 → 不寫檔 exit 1；連續 3 市場失敗熔斷。`notify.py` 刻意不重試（避免重複推播）。
     - 前端 JSON 一律 `cache:"no-cache"`（ETag 304，不要改回 no-store：每次開 App 會重抓 3～5MB）。
     - 精準進貨比價只採計最新成交日前 `CMP_FRESH_DAYS`(4) 天內的報價，舊價排最後標「舊價」。
-  - **測試（改程式後必跑）**：`pip install -r requirements-dev.txt && python -m pytest -q tests/`（離線、兩支 App 都測）；
-    `node tests/e2e/smoke.cjs`（iPhone 13 尺寸冒煙，截圖在 test-results/）。CI：`.github/workflows/test.yml`。
+    - **比價預設比「主要品種」**（`mainVariety`），不要改回「全部綜合」：各市場品種組成不同（高雄韭菜混韭菜黃），
+      回測 E 顯示會把「買到不同東西」當成便宜。價差 2 倍以上標「可能等級／包裝不同」；運費欄 `jb_freight`（元/公斤）。
+    - **行情排程**：台灣 05–12 時每小時＋14 時（merchant 晚 30 分）；每月第一次（或格式變、`--full`）整段重抓 2 年，
+      其餘只抓近 14 天（index `last_full`）；`seen` 記每個交易日第一次抓到的時間。
+    - **5 年封存** `prices/archive/NN_YYYY.json`（只有務農，`ARCHIVE_YEARS=5`）：滑出 2 年窗的資料搬進去；回填有時間預算
+      （手動觸發 update-prices.yml 的 `backfill_minutes`），每個「市場×年」做完就存進度。只給摘要與回測用，手機不下載。
+    - 產地價、零售抓不到 → 保留舊檔、不寫空檔、黃燈警告，不擋行情更新。
   - **技能**：`.claude/skills/` 由 skl 的 app-bootstrap 安裝（清單見 `.claude/skills/.skl-vendor.json`）；
     更新：`python3 /tmp/skl/xin-toolkit/skills/app-bootstrap/scripts/bootstrap_app.py update --target .`。
 - **測試**：`pip install -r requirements-dev.txt && python -m pytest -q tests/`；`node --test tests/core.test.cjs`；
   `node tests/e2e/smoke.cjs`（iPhone 13 尺寸；`E2E_ROOT=<資料副本> E2E_SPLIT=1` 可驗新格式與品種延後載入）。CI：`.github/workflows/test.yml`。
 - **回測結論（2026-10，docs/backtest.md）**：往年同期判斷沒有勝過舊法 → 看板標籤維持「近 90 筆 ±10%」，往年同期只當補充；
   季節低價多進貨平均多花 5% → 不做；採收預判 30 天誤差 ≈「價格不變」、區間命中 31% → App 上有誠實說明；搭配種法選菜勝過固定單作。
+  跨市場進貨（同品種）：中部運費 2 元/公斤只省 0.3%、不填運費反虧；北部/高雄看似省 2 成但多半是等級不同 → 比價頁附說明。
+  零售：批發×倍數誤差中位數 21%，直接用 1～6 個月前的零售價只有 8～15% → 零售卡先給零售價，倍數只當參考。
 
 ### 版本號規則
 對外版本自 **v1.0.0** 起，之後**每次改版最後一碼 +1、逢 9 進位**：

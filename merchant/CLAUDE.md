@@ -22,6 +22,9 @@
     → 不覆蓋、沿用上次 index 條目；全部失敗 → 不寫檔 exit 1；連續 3 市場失敗熔斷。`notify.py` 刻意不重試（避免重複推播）。
   - 前端 JSON 一律 `cache:"no-cache"`（ETag 304，不要改回 no-store：每次開 App 會重抓 3～5MB）。
   - 精準進貨比價只採計最新成交日前 `CMP_FRESH_DAYS`(4) 天內的報價，舊價排最後標「舊價」。
+  - 比價預設比「主要品種」（`mainVariety`），不要改回「全部綜合」（各市場品種組成不同，回測 docs/backtest.md E）；
+    運費 `jb_freight`（元/公斤）只加在別的市場；價差 2 倍以上標「可能等級／包裝不同」；結論寫在 `CMP_BT_NOTE`。
+  - 零售參考 `retail.json` 由 `scripts/fetch_retail.py` 產生（臺北市公有零售市場月均價）；卡片先給零售價，倍數只當參考（回測 F）。
 - **2026-10-31 起共用**：`merchant/core.js`（＝根目錄 core.js，前端共用演算法）、`merchant/scripts/price_core.py`（＝scripts/price_core.py，
   行情三檔格式 NN.json／NN_v.json／NN_recent.json＋看板摘要 sum、增量抓取）。兩份內容須一致（測試會比對），改一邊就複製到另一邊。
   專案工作守則（授權、隱私、做事方式）以根目錄 `CLAUDE.md` 為準。
@@ -146,8 +149,8 @@ python3 -m http.server 8080               # 開 http://localhost:8080 看真實�
 - 資料 JSON 由 `update-data.yml`（天氣，30 分）與 `update-prices.yml`（行情，每日數次）
   兩支排程分別提交到 Pages 所服務的 main 分支根。
 - 版本號在 `index.html` 的 `const VERSION`（頁尾顯示「精準進貨 vX.Y.Z」，淺灰置中）。
-  標準 SemVer：修 bug 進 Z、加功能進 Y、大改版進 X。目前 `v1.6.0`。
-  改前端有感內容時，記得同步把 `sw.js` 的 `CACHE` 版本號 +1（目前 `jingzhun-buy-v6`）讓舊快取失效。
+  版本規則以根目錄 `CLAUDE.md`「版本號規則」為準（最後一碼 +1、逢 9 進位）；目前版本看 `index.html` 的 `VERSION`。
+  改前端有感內容時，記得同步把 `sw.js` 的 `CACHE` 版本號 +1 讓舊快取失效。
 
 ## ⚑ 更新內容彈窗（What's New）
 
