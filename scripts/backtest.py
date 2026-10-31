@@ -5,6 +5,11 @@ backtest.py —— 離線回測（不連網），用 repo 裡的真實批發行�
   B. 精準進貨「季節低價時多進一點」策略，比「每週固定進貨」省多少？（含運費、存放損耗）
   C. 採收預判 predict_price 準不準？跟兩個天真基準比：「價格不變」（＝買進持有的對應）、「去年同期價」。
   D. 搭配種法「挑預估每天淨利最高的菜」，實際收成時有沒有比「一直種小白菜」「種去年同期最賺的」好？
+  E. 精準進貨跨市場比價：每天照 App「含運最便宜」去別的市場進貨，扣掉運費、路上損耗後，真的比在自己市場買便宜嗎？
+  F. 零售參考價：「批發價 × 每種菜自己的倍數」估零售，準不準？跟「固定 2 倍」「上個月零售價」比。
+
+有 5 年封存（prices/archive/，排程回填後才有）時自動一起讀：A、B 用得到更長的「往年同期」；
+C、D 仍只給模型看決策日前 2 年（手機上只有 2 年資料，回測不能比 App 實際看到的多）。
 
 防偏誤（每一題都適用）：
   - 未來函數：每個決策只用「當天（含）以前」的資料；訊號出現後，用「下一個交易日」的價格成交。
@@ -12,9 +17,11 @@ backtest.py —— 離線回測（不連網），用 repo 裡的真實批發行�
   - 成本：沒有證交稅；運費、損耗、手續費都是參數（下方預設值是「假設」，請換成你的實際數字）。
   - 倖存者偏差：作物用當時有成交的；但市場清單是「現在還查得到的 19 個」，已關閉的市場不在資料裡（報告會註明）。
 
-用法：python3 scripts/backtest.py [--app-dir .] [--out docs/backtest.md]
+用法：python3 scripts/backtest.py [--app-dir .] [--out docs/backtest.md] [--retail merchant/retail.json]
 """
 import argparse
+import bisect
+import importlib.util
 import json
 import os
 import re
@@ -27,7 +34,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import price_core as pc  # noqa: E402
 
 # ── 可調參數（假設值，請換成實際數字） ──
-Y2_START = "2025-10-01"          # 第 2 年起：此後「往年同期」才有資料
+Y2_START = "2025-10-01"          # 第 2 年起：此後「往年同期」才有資料（load_app 會依資料起點＋365 天重算）
+APP_LOOKBACK_DAYS = 730          # C／D：手機上只有近 2 年資料 → 模型只准看決策日前 730 天
 FWD_DAYS = 10                    # A：訊號後看幾個交易日的平均價
 STEP = 3                         # A／C：每隔幾個交易日取一次樣本（加快速度）
 MIN_DAYS = 400                   # 只評估 2 年內至少 400 個交易日的作物（太冷門的價格不可靠）
@@ -40,6 +48,18 @@ FEE = 0.06                       # D：拍賣手續費（App 現用估計值）
 AREA_M2, USABLE = 293.4, 0.8     # D：1 分地、可用 80%
 COST_PER_CYCLE = 2500 + 1800 + 5000 + 3500   # D：App 預設每期成本（肥料/農藥/人工/資材）
 APP_TO_WHOLESALE = {"青江菜": "青江白菜", "空心菜": "蕹菜", "地瓜葉": "甘薯葉", "萵苣(A菜)": "萵苣菜"}
+# E：跨市場進貨。只跟「同一區、開車當天來回得了」的市場比（台中商人不會為了便宜 3 元跑高雄）。
+REGIONS = {"北部": ["台北一", "台北二", "三重", "板橋", "桃農", "宜蘭"],
+           "中部": ["台中", "豐原", "東勢", "南投", "溪湖", "永靖", "西螺"],
+           "南部": ["嘉義", "高雄", "鳳山", "屏東"]}
+HOMES = {"台北一": "北部", "台中": "中部", "高雄": "南部"}
+FREIGHTS = (0, 1, 2, 3, 5)       # 元/公斤＝App 比價頁「運費」欄位填的數字
+TRANSIT_LOSS = 0.03              # 從別的市場載回來的路上損耗 3%（假設）
+FRESH_DAYS = 4                   # 與前端 CMP_FRESH_DAYS 一致：超過 4 天沒成交的市場不參加比價
+MIN_CMP_DAYS = 200               # 鄰近市場至少 200 個交易日有這項作物，才列入候選（偶爾才有貨的不算）
+# F：零售參考價
+RETAIL_FIXED = 2.0               # 對照組：常聽到的「零售約批發 1.5～2.5 倍」取中間 2 倍
+RETAIL_LAGS = (1, 2, 3, 6)       # 零售資料若晚 1／2／3／6 個月才看得到，「直接用舊零售價」還準不準
 
 
 def iso_add(iso, n):
@@ -47,18 +67,29 @@ def iso_add(iso, n):
 
 
 def load_app(app_dir):
+    """讀全部市場的母作物序列（有 5 年封存就一起讀）。回傳 (markets, index, 第 2 年起點, 有沒有封存)。"""
     ix = json.load(open(os.path.join(app_dir, "prices_index.json"), encoding="utf-8"))
     out = {}
     cwd = os.getcwd()
     os.chdir(app_dir)
     try:
         for m in ix["markets"]:
-            data, _ = pc.read_market(m)
+            data, _ = pc.read_market(m, with_archive=True)
             if data:
                 out[m["name"]] = {c: pc._valid(s) for c, s in data.items()}
     finally:
         os.chdir(cwd)
-    return out, ix
+    has_arch = any(m.get("archive") for m in ix["markets"])
+    firsts = sorted(es[0][0] for crops in out.values() for es in crops.values() if es)
+    # 「往年同期」至少要有一整年歷史才算得出來 → 從資料起點（取第 10 百分位，避免單一怪資料）＋365 天開始評估
+    y2 = iso_add(firsts[len(firsts) // 10], 365) if firsts else Y2_START
+    return out, ix, y2, has_arch
+
+
+def app_window(es, dates, as_of):
+    """手機上看得到的資料：決策日前 APP_LOOKBACK_DAYS 天內（含當天）。dates＝es 的日期清單（已排序，用二分搜尋切片）。"""
+    lo = iso_add(as_of, -APP_LOOKBACK_DAYS)
+    return dict(es[bisect.bisect_left(dates, lo):bisect.bisect_right(dates, as_of)])
 
 
 def avg_near(es_by_date, iso, win=3):
@@ -173,13 +204,14 @@ def eval_predict(markets):
         for c, es in crops.items():
             if len(es) < MIN_DAYS:
                 continue
-            series = dict(es)
+            dates = [d for d, _ in es]
             by = {d: v["avg"] for d, v in es}
             last_day = es[-1][0]
             for i in range(0, len(es), STEP * 3):
                 t = es[i][0]
                 if t < Y2_START:
                     continue
+                series = app_window(es, dates, t)
                 for h in HORIZONS:
                     tgt = iso_add(t, h)
                     if tgt > last_day:
@@ -250,7 +282,7 @@ def eval_rotation(markets, html):
                 ykg = AREA_M2 * USABLE * ym2.get(app_name, 2.5) * (0.9 if summer else 1.1)
                 by = {x: v["avg"] for x, v in crops[w]}
                 actual = avg_near(by, hv)
-                p = pc.predict_price(dict(crops[w]), hv, as_of=d)
+                p = pc.predict_price(app_window(crops[w], [x for x, _ in crops[w]], d), hv, as_of=d)
                 ly_price = avg_near(by, iso_add(hv, -365))
                 if actual is None or p is None:
                     continue
@@ -273,13 +305,244 @@ def eval_rotation(markets, html):
     return res
 
 
+# ───────────────────────── E. 跨市場進貨（精準進貨比價頁） ─────────────────────────
+def _ordinal(iso):
+    return date.fromisoformat(iso).toordinal()
+
+
+def _simulate(home, h_es, others, acc):
+    """一個比價單位（某作物或某品種）：每個交易日收市後照 App 比價頁的規則（近 4 天內有成交、含運價最低）挑市場，
+    下一個交易日去那裡進貨；對照組＝一直在自己市場進貨。別的市場的成本＝當天價÷(1−路上損耗)＋運費；
+    那天那個市場沒開就只能在自己市場買。另算「固定去平常最便宜的市場」（每月初用前 90 天中位數挑一次，不用每天看 App）。
+    h_es：[(日期, 均價)]；others：{市場: [(日期, 均價)]}；acc：{運費: 累計}（就地累加）。回傳這個單位的 {運費: (省下比例, 天數)}。"""
+    oth = {mk: ([_ordinal(d) for d, _ in es], [p for _, p in es], dict(es)) for mk, es in others.items()}
+    unit = {f: [0.0, 0.0, 0] for f in FREIGHTS}            # strat, base, n
+    static_pick, static_month = {f: home for f in FREIGHTS}, None
+    for i in range(len(h_es) - 1):
+        (t, pt), (t1, p_home1) = h_es[i], h_es[i + 1]
+        if t < Y2_START:                                    # 與其他題同一段期間（第 2 年起）
+            continue
+        ot = _ordinal(t)
+        if _ordinal(t1) - ot > FRESH_DAYS:                  # 長休市（過年）後不比：那時的「最新價」都是舊的
+            continue
+        seen = {home: pt}                                   # 當晚 App 上看得到的各市場最新價
+        for mk, (ods, ps, _) in oth.items():
+            j = bisect.bisect_right(ods, ot) - 1
+            if j >= 0 and ot - ods[j] <= FRESH_DAYS:
+                seen[mk] = ps[j]
+        if t[:7] != static_month:                           # 每月初重挑一次「平常最便宜」的市場（只用之前 90 天）
+            static_month = t[:7]
+            lo = ot - 90
+            meds = {home: statistics.median([p for d, p in h_es[max(0, i - 90):i + 1] if _ordinal(d) >= lo])}
+            for mk, (ods, ps, _) in oth.items():
+                a, b = bisect.bisect_left(ods, lo), bisect.bisect_right(ods, ot)
+                if b - a >= 20:
+                    meds[mk] = statistics.median(ps[a:b])
+            for f in FREIGHTS:
+                static_pick[f] = min(meds, key=lambda mk: meds[mk] + (0 if mk == home else f))
+        raw1 = {mk: o[2].get(t1) for mk, o in oth.items()}   # 隔天各市場實際價（沒開市＝None）
+        for f in FREIGHTS:
+            def cost(mk):
+                if mk == home or raw1.get(mk) is None:
+                    return p_home1
+                return raw1[mk] / (1 - TRANSIT_LOSS) + f
+            pick = min(seen, key=lambda mk: seen[mk] + (0 if mk == home else f))   # App：含運最便宜
+            naive = min(seen, key=lambda mk: seen[mk])                              # 沒填運費：只看最便宜
+            T = acc[f]
+            T["n"] += 1
+            T["base"] += p_home1
+            T["strat"] += cost(pick)
+            T["naive"] += cost(naive)
+            T["static"] += cost(static_pick[f])
+            T["oracle"] += min([p_home1] + [cost(mk) for mk in oth])               # 事後才知道的最佳（上限）
+            if pick != home:
+                T["remote"] += 1
+                if raw1.get(pick) is None:
+                    T["closed"] += 1
+                elif cost(pick) < p_home1:
+                    T["hit"] += 1
+            u = unit[f]
+            u[0] += cost(pick)
+            u[1] += p_home1
+            u[2] += 1
+    return {f: (1 - u[0] / u[1], u[2]) for f, u in unit.items() if u[2]}
+
+
+def _avg_es(series):
+    return [(d, v["avg"]) for d, v in pc._valid(series)]
+
+
+def _var_ok(label):
+    """「其他」「進口」是雜項／不同來源，各市場內容不一樣，不拿來跨市場比。"""
+    return label and label != "其他" and "進口" not in label
+
+
+def load_region_variants(app_dir, ix, names):
+    """只讀某一區市場的品種序列（只留均價，省記憶體；全部市場的品種檔合計約 80 MB）。"""
+    out = {}
+    cwd = os.getcwd()
+    os.chdir(app_dir)
+    try:
+        for m in ix["markets"]:
+            if m["name"] in names:
+                _, var = pc.read_market(m)
+                out[m["name"]] = {c: {lab: _avg_es(s) for lab, s in vv.items() if _var_ok(lab)} for c, vv in (var or {}).items()}
+    finally:
+        os.chdir(cwd)
+    return out
+
+
+def eval_cross_market(markets, app_dir, ix):
+    """兩種比法：①「全部綜合」（母作物均價；各市場品種組成不同）②同品種比（只比名稱相同的品種）。"""
+    out = {}
+    for home, region in HOMES.items():
+        if home not in markets:
+            continue
+        names = [m for m in REGIONS[region] if m in markets]
+        mvars = load_region_variants(app_dir, ix, names)
+        res = {}
+        for level in ("parent", "variety"):
+            acc = {f: {k: 0.0 for k in ("strat", "naive", "static", "oracle", "base")} | {"n": 0, "remote": 0, "hit": 0, "closed": 0}
+                   for f in FREIGHTS}
+            per = {f: [] for f in FREIGHTS}
+            units = 0
+            for c, es in markets[home].items():
+                hv = mvars.get(home, {}).get(c) or {}
+                if level == "parent":
+                    todo = [(c, [(d, v["avg"]) for d, v in es],
+                             {mk: [(d, v["avg"]) for d, v in markets[mk][c]] for mk in names
+                              if mk != home and len(markets[mk].get(c) or []) >= MIN_CMP_DAYS})]
+                elif hv:                                        # 有品種：同名品種才比
+                    todo = [(f"{c}·{lab}", h, {mk: mvars[mk][c][lab] for mk in names
+                                               if mk != home and len((mvars.get(mk, {}).get(c) or {}).get(lab) or []) >= MIN_CMP_DAYS})
+                            for lab, h in hv.items()]
+                else:                                           # 沒有品種：只跟「也沒分品種」的市場比母作物
+                    todo = [(c, [(d, v["avg"]) for d, v in es],
+                             {mk: [(d, v["avg"]) for d, v in markets[mk][c]] for mk in names
+                              if mk != home and not (mvars.get(mk, {}).get(c)) and len(markets[mk].get(c) or []) >= MIN_CMP_DAYS})]
+                for name, h_es, others in todo:
+                    if len(h_es) < MIN_DAYS or not others:
+                        continue
+                    units += 1
+                    for f, (sv, n) in _simulate(home, h_es, others, acc).items():
+                        if n >= 100:
+                            per[f].append((name, sv, n))
+            r = {}
+            for f, T in acc.items():
+                if not T["n"]:
+                    continue
+                r[f] = {"n": T["n"], "units": units, "save": 1 - T["strat"] / T["base"], "save_naive": 1 - T["naive"] / T["base"],
+                        "save_static": 1 - T["static"] / T["base"], "save_oracle": 1 - T["oracle"] / T["base"],
+                        "remote": T["remote"] / T["n"],
+                        "hit": T["hit"] / (T["remote"] - T["closed"]) if T["remote"] > T["closed"] else None,
+                        "best": sorted(per[f], key=lambda x: -x[1])[:5], "worst": sorted(per[f], key=lambda x: x[1])[:3],
+                        "median_unit": statistics.median(x[1] for x in per[f]) if per[f] else None}
+            res[level] = r
+        del mvars
+        out[home] = {"region": region, "others": [m for m in names if m != home], "res": res}
+    return out
+
+
+# ───────────────────────── F. 零售參考價（精準進貨詳細頁） ─────────────────────────
+def _retail_module():
+    """載入 merchant/scripts/fetch_retail.py（品名對照表 RETAIL_MAP、批發月均算法跟線上同一份）。"""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "merchant", "scripts", "fetch_retail.py")
+    spec = importlib.util.spec_from_file_location("fetch_retail", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def load_retail_months(path):
+    """retail.json 的 months，或直接是 {月: {品名: 價}} 的檔；讀不到回 {}。"""
+    try:
+        with open(path, encoding="utf-8") as f:
+            j = json.load(f)
+    except Exception:
+        return {}
+    m = j.get("months") if isinstance(j, dict) and "months" in j else j
+    return {k: v for k, v in (m or {}).items() if re.match(r"^\d{4}-\d{2}$", k) and isinstance(v, dict)}
+
+
+def eval_retail(app_dir, ix, months):
+    """依時間順序逐月：只用「這個月以前」的月份算每種菜的倍數，再用這個月的台北一批發月均估零售，跟實際零售比。"""
+    if not months:
+        return None
+    fr = _retail_module()
+    ent = next((m for m in ix["markets"] if m["name"] == fr.REF_MARKET), None)
+    if not ent:
+        return None
+    cwd = os.getcwd()
+    os.chdir(app_dir)
+    try:
+        data, variants = pc.read_market(ent)
+    finally:
+        os.chdir(cwd)
+    if not data:
+        return None
+    yms = sorted(months)
+    wm = {item: fr.wholesale_monthly(data[crop], var, (variants or {}).get(crop))
+          for item, (crop, var) in fr.RETAIL_MAP.items() if crop in data}
+    ratio = {item: {ym: months[ym][item] / (w[ym] * fr.JIN) for ym in yms if item in months[ym] and ym in w}
+             for item, w in wm.items()}
+    q = lambda xs, p: xs[min(len(xs) - 1, int(len(xs) * p))]
+    rows = []
+    for k, ym in enumerate(yms):
+        prior_yms = yms[max(0, k - fr.MULT_MONTHS):k]
+        pool = sorted(r[m] for r in ratio.values() for m in prior_yms if m in r)
+        for item, r in ratio.items():
+            if ym not in r:
+                continue
+            prior = sorted(r[m] for m in prior_yms if m in r)
+            if len(prior) < 3 or len(pool) < 10:
+                continue
+            w = wm[item][ym] * fr.JIN
+            actual = months[ym][item]
+            last = next((months[m][item] for m in reversed(yms[:k]) if item in months[m]), None)
+            ape = lambda pred: abs(pred - actual) / actual
+            lag = {L: months[yms[k - L]].get(item) if k - L >= 0 else None for L in RETAIL_LAGS}   # 零售資料晚 L 個月才看得到
+            rows.append({"item": item, "ym": ym, "model": ape(w * statistics.median(prior)),
+                         "pool": ape(w * statistics.median(pool)), "fixed": ape(w * RETAIL_FIXED),
+                         "last": ape(last) if last else None,
+                         **{f"lag{L}": ape(v) if v else None for L, v in lag.items()},
+                         "cover": 1 if w * q(prior, .25) <= actual <= w * q(prior, .75) else 0,
+                         "in_rule": 1 if 1.5 <= r[ym] <= 2.5 else 0})
+    if not rows:
+        return None
+    lasts = [x for x in rows if x["last"] is not None]
+    lags = {}
+    for L in RETAIL_LAGS:                                  # 同一批樣本比：那個落後月份有零售價的才算
+        xs = [x for x in rows if x[f"lag{L}"] is not None]
+        if len(xs) >= 30:
+            lags[L] = {"n": len(xs), "lag": statistics.median(x[f"lag{L}"] for x in xs),
+                       "model": statistics.median(x["model"] for x in xs)}
+    by_item = {}
+    for x in rows:
+        by_item.setdefault(x["item"], []).append(x["model"])
+    return {"n": len(rows), "items": len(by_item), "months": (rows[0]["ym"], rows[-1]["ym"]),
+            "mape": {k: statistics.mean(x[k] for x in rows) for k in ("model", "pool", "fixed")} | {"last": statistics.mean(x["last"] for x in lasts) if lasts else None},
+            "mdape": {k: statistics.median(x[k] for x in rows) for k in ("model", "pool", "fixed")} | {"last": statistics.median(x["last"] for x in lasts) if lasts else None},
+            "within10": {k: statistics.mean(1 if x[k] <= 0.10 else 0 for x in rows) for k in ("model", "pool", "fixed")} | {"last": statistics.mean(1 if x["last"] <= 0.10 else 0 for x in lasts) if lasts else None},
+            "beat_last": statistics.mean(1 if x["model"] < x["last"] else 0 for x in lasts) if lasts else None,
+            "coverage": statistics.mean(x["cover"] for x in rows), "in_rule": statistics.mean(x["in_rule"] for x in rows),
+            "lags": lags,
+            "worst": sorted(((it, statistics.mean(v), len(v)) for it, v in by_item.items() if len(v) >= 3), key=lambda x: -x[1])[:5],
+            "best": sorted(((it, statistics.mean(v), len(v)) for it, v in by_item.items() if len(v) >= 3), key=lambda x: x[1])[:5]}
+
+
 # ───────────────────────── 報告 ─────────────────────────
-def report(app_dir, out_path):
+def report(app_dir, out_path, retail_path=None):
+    global Y2_START
     t0 = time.time()
-    markets, ix = load_app(app_dir)
+    markets, ix, Y2_START, has_arch = load_app(app_dir)
+    first = min(es[0][0] for crops in markets.values() for es in crops.values() if es)
     html = open(os.path.join(app_dir, "index.html"), encoding="utf-8").read()
     A, B, C, D = eval_tags(markets), eval_buying(markets), eval_predict(markets), eval_rotation(markets, html)
-    L = [f"# 回測報告（{ix.get('updated', '')} 資料；{len(markets)} 個市場；第 2 年 {Y2_START} 起樣本外）", "",
+    E = eval_cross_market(markets, app_dir, ix)
+    months = load_retail_months(retail_path) if retail_path else {}
+    F = eval_retail(app_dir, ix, months)
+    L = [f"# 回測報告（{ix.get('updated', '')} 資料；{len(markets)} 個市場；資料自 {first} 起"
+         f"{'（含 5 年封存）' if has_arch else ''}；{Y2_START} 起樣本外）", "",
          "> 每個決策只用當天以前的資料、隔一個交易日成交；運費、損耗、成本為**假設值**（見 scripts/backtest.py 頂部）。",
          "> 市場清單是「現在還查得到的市場」，已關閉的市場不在資料裡（倖存者偏差，影響小但存在）。", ""]
     L += ["## A. 偏貴／偏便宜：訊號後 10 個交易日的平均價變化", "",
@@ -314,19 +577,67 @@ def report(app_dir, out_path):
         for k, (v, n) in r["result"].items():
             L.append(f"| {k} | {'—' if v is None else f'{v:,.0f}'} | {n} |")
         L.append("")
-    L.append(f"_執行時間 {time.time() - t0:.0f} 秒；產生方式：`python3 scripts/backtest.py`。_")
+    L += ["## E. 精準進貨跨市場比價：照「含運最便宜」去別的市場進貨，比一直在自己市場買省多少", "",
+          f"每個交易日收市後看 App 比價頁（近 {FRESH_DAYS} 天內有成交的市場），隔一個交易日去「含運價最低」的市場買；"
+          f"別的市場要加運費、路上損耗 {TRANSIT_LOSS*100:.0f}%（假設），那天沒開市就在自己市場買。"
+          "只跟同一區、當天來回得了的市場比。省下＝跟一直在自己市場買相比（正＝省、負＝反而多花）。", "",
+          "⚠ 兩種比法差很多：「全部綜合」是各市場所有品種混在一起的均價，各市場賣的品種、等級不一樣"
+          "（例：高雄的韭菜混了很多韭菜黃，屏東多是白頭韭菜），看起來便宜很多其實是買到不同的東西。"
+          "「同品種比」只比名稱相同的品種（排除「其他」「進口」），比較接近真的能省的錢；但同品種也可能等級不同，仍是上限。", ""]
+    for home, r in E.items():
+        L += [f"**{home}**（同區比：{'、'.join(r['others'])}）", "",
+              "| 比法 | 運費（元/公斤） | 去別的市場的天數 | 去了真的比較便宜 | 照 App 含運排名 | 不填運費只看最便宜 | 固定去平常最便宜的（每月挑一次） | 事後最佳（上限） |",
+              "|---|---|---|---|---|---|---|---|"]
+        for level, lname in (("parent", "全部綜合"), ("variety", "同品種")):
+            for f, x in r["res"].get(level, {}).items():
+                hit = "—" if x["hit"] is None else f"{x['hit'] * 100:.0f}%"
+                L.append(f"| {lname} | {f} | {x['remote']*100:.0f}% | {hit} | {fmt_pct(x['save'])} | {fmt_pct(x['save_naive'])} | "
+                         f"{fmt_pct(x['save_static'])} | {fmt_pct(x['save_oracle'])} |")
+        v2 = r["res"].get("variety", {}).get(2)
+        if v2 and v2["best"]:
+            L += ["", f"同品種、運費 2 元/公斤（{v2['units']} 個品項·品種，每個至少 100 天）：省下的中位數 {fmt_pct(v2['median_unit'])}；"
+                  "最值得跨市場買：" + "、".join(f"{c} {fmt_pct(v)}" for c, v, _ in v2["best"]) +
+                  "；最不值得：" + "、".join(f"{c} {fmt_pct(v)}" for c, v, _ in v2["worst"]) + "。"]
+        L.append("")
+    L += ["## F. 零售參考價：批發 × 每種菜自己的倍數，估得準不準", ""]
+    if not F:
+        L += ["還沒有零售資料（等 merchant 排程抓到 retail.json 後重跑：`python3 scripts/backtest.py --retail merchant/retail.json`）。", ""]
+    else:
+        L += [f"臺北市公有零售市場月均價 vs 台北一批發月均，{F['months'][0]}～{F['months'][1]} 逐月、{F['items']} 個品項、{F['n']} 筆；"
+              "每個月只用之前（最多 12 個月）的資料算倍數（樣本外）。誤差＝|估計−實際|÷實際。", "",
+              "| 估法 | 平均誤差 | 誤差中位數 | 誤差在 10% 內 |", "|---|---|---|---|"]
+        for k, name in (("model", "批發 × 每種菜自己的倍數（App 用的）"), ("pool", "批發 × 全部菜共用一個倍數"),
+                        ("fixed", f"批發 × 固定 {RETAIL_FIXED:g} 倍"), ("last", "直接用上個月零售價")):
+            if F["mape"][k] is None:
+                continue
+            L.append(f"| {name} | {F['mape'][k]*100:.0f}% | {F['mdape'][k]*100:.0f}% | {F['within10'][k]*100:.0f}% |")
+        L += ["", f"App 顯示的「中間一半」倍數區間，實際零售落在裡面的比例：{F['coverage']*100:.0f}%（設計上約 50%）。",
+              f"實際零售 ÷ 批發落在「1.5～2.5 倍」的比例：{F['in_rule']*100:.0f}%。"
+              + (f"每種菜自己的倍數贏「上個月零售價」的比例：{F['beat_last']*100:.0f}%。" if F["beat_last"] is not None else ""),
+              ""]
+        if F["lags"]:
+            L += ["零售資料越舊，「直接用舊零售價」越不準；這時改用「今天批發 × 倍數」：", "",
+                  "| 零售資料晚幾個月 | 直接用舊零售價（誤差中位數） | 批發 × 倍數（誤差中位數） | 樣本 |", "|---|---|---|---|"]
+            for lg, x in F["lags"].items():
+                L.append(f"| {lg} 個月 | {x['lag']*100:.0f}% | {x['model']*100:.0f}% | {x['n']} |")
+            L.append("")
+        L += ["估得最準：" + "、".join(f"{it} {v*100:.0f}%" for it, v, _ in F["best"]) +
+              "；最不準：" + "、".join(f"{it} {v*100:.0f}%" for it, v, _ in F["worst"]) + "。", ""]
+    L.append(f"_執行時間 {time.time() - t0:.0f} 秒；產生方式：`python3 scripts/backtest.py"
+             f"{' --retail ' + retail_path if retail_path else ''}`。_")
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         f.write("\n".join(L) + "\n")
-    return {"A": A, "B": B, "C": C, "D": D}
+    return {"A": A, "B": B, "C": C, "D": D, "E": E, "F": F}
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--app-dir", default=".")
     ap.add_argument("--out", default="docs/backtest.md")
+    ap.add_argument("--retail", default="merchant/retail.json", help="零售月均價（retail.json 或 {月:{品名:價}}）")
     a = ap.parse_args()
-    r = report(a.app_dir, a.out)
+    r = report(a.app_dir, a.out, a.retail)
     print(open(a.out, encoding="utf-8").read())
     return r
 
