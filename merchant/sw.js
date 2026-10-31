@@ -3,15 +3,16 @@
    - HTML / JSON 資料：network-first（連得上就拿最新，離線退回上次快取；HTML 再退回 index.html 殼）。
    - 圖示等靜態資源：cache-first。
    改版時把 CACHE 版本號 +1 即可讓舊快取失效（activate 會清掉非當前版本）。 */
-const CACHE = "jingzhun-buy-v11";
+const CACHE = "jingzhun-buy-v12";
 const SHELL = ["./", "./index.html", "./core.js", "./privacy.html", "./terms.html", "./manifest.json",
                "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
     caches.open(CACHE)
-      // 逐檔快取：單一檔失敗不會像 addAll 那樣整批失敗、導致殼快取全空（白畫面主因之一）
-      .then((c) => Promise.all(SHELL.map((u) => c.add(u).catch(() => {}))))
+      // 逐檔、一個接一個快取：單一檔失敗不會像 addAll 那樣整批失敗、導致殼快取全空（白畫面主因之一）；
+      // 依序下載不一次併發 9 個請求（手機網路差時較不會整批逾時）
+      .then((c) => SHELL.reduce((p, u) => p.then(() => c.add(u).catch(() => {})), Promise.resolve()))
       .then(() => self.skipWaiting())
   );
 });

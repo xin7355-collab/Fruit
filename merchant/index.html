@@ -365,7 +365,7 @@
   .form label{font-size:0.85rem;color:var(--muted);display:block;margin-bottom:0.3rem;}
   .form input,.form select{width:100%;box-sizing:border-box;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--paper);padding:0.6rem 0.7rem;border-radius:12px;font-size:1rem;}
   .form input[type=date]{-webkit-appearance:none;appearance:none;}
-  .cmpform{flex-direction:row;gap:0.6rem;} .cmpform select{flex:1;}
+  .cmpform{flex-direction:row;flex-wrap:wrap;gap:0.6rem;} .cmpform select{flex:1 1 0;min-width:0;}
 
   .foot{margin-top:1.6rem;color:var(--muted);font-size:0.72rem;line-height:1.7;border-top:1px solid var(--line);padding-top:0.9rem;}
 
@@ -449,6 +449,24 @@
 .of-res{margin-top:.5rem;font-size:.9rem;line-height:1.5;}
 .of-res small{display:block;opacity:.7;font-size:.78rem;}
 .of-res.good b{color:#5FB85A;}.of-res.ok b{color:var(--paper);}.of-res.warn b{color:#E8B04A;}.of-res.bad b{color:#E4572E;}
+.qchip{font-size:.72em;font-weight:700;padding:.05rem .4rem;border-radius:999px;margin-left:.3rem;white-space:nowrap;}
+.qchip.lo{background:rgba(232,176,74,.22);color:#E8B04A;}.qchip.hi{background:rgba(95,184,90,.22);color:#5FB85A;}
+.closedbar{background:rgba(232,176,74,.15);border:1px solid rgba(232,176,74,.4);border-radius:var(--radius,12px);padding:.55rem .75rem;margin:.2rem 0 .5rem;font-size:.9rem;}
+.retail{margin:.4rem 0;padding:.45rem .65rem;border-radius:10px;background:rgba(242,158,56,.10);font-size:.88rem;line-height:1.5;}
+.retail small{display:block;opacity:.8;font-size:.8rem;}
+.digest{border:1px solid var(--line);background:var(--panel);border-radius:var(--radius,12px);padding:.6rem .75rem;margin:.2rem 0 .6rem;}
+.dg-t{font-weight:800;display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:.3rem;}
+.dg-x{background:none;border:0;color:var(--paper);font-size:1rem;min-width:44px;min-height:36px;opacity:.7;}
+.dg-l{font-size:.9rem;line-height:1.55;margin:.15rem 0;}
+.dg-n{font-size:.75rem;opacity:.65;margin-top:.35rem;}
+.cmpfreight{flex:1 1 100%;display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;font-size:.85rem;margin:0;}
+.cmprow em.cmpodd{font-style:normal;color:var(--y);}
+.cmpmix{color:var(--y);}
+details.cmpbt{margin:.7rem 0 0;padding:.6rem .8rem;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:.85rem;}
+details.cmpbt summary{cursor:pointer;font-weight:600;}
+details.cmpbt p{margin:.45rem 0 0;line-height:1.55;}
+.cmpfreight .nw{display:inline-flex;align-items:center;gap:.3rem;white-space:nowrap;}
+.cmpfreight input{width:5.5em;font-size:16px;padding:.35rem .5rem;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--paper);}
 </style>
 </head>
 <body>
@@ -490,6 +508,7 @@
     <div class="form cmpform" style="padding:0.6rem 0.7rem">
       <select id="cmpCrop"></select>
       <select id="cmpVar" style="display:none"></select>
+      <label class="cmpfreight"><span>運費（從別的市場運回來）</span><span class="nw"><input id="cmpFreight" type="number" inputmode="decimal" min="0" step="0.5" placeholder="0"> 元/公斤</span></label>
     </div>
     <div id="cmpResult"></div>
   </div>
@@ -615,11 +634,20 @@
 /* 共用演算法放在 core.js（兩支 App 同一份內容、有單元測試）：這裡直接取用，不再各寫一份 */
 const {doyOf,weekOf,median,pctile,sortedEntries,mergeSeries,toLunar}=Core;
 /* ══════ 基礎 ══════ */
-const VERSION="v1.7.4";
+const VERSION="v1.7.5";
 /* 版本更新紀錄（最新在最上面）。未來每次改版就在陣列最前面新增一筆：
    {v:版本, date:"YYYY-MM-DD", title:"一句話重點", items:[本次更新條列…]}。
    會顯示在「設定→關於 App→更新內容」，改版後第一次開啟也會自動彈一次本版。 */
 const CHANGELOG=[
+  {v:"v1.7.5", date:"2026-10-31", title:"比價更準：同品種、含運價、零售參考 🧾", items:[
+    "【修正】比價預設改比「主要品種」：回測發現「全部綜合」把各市場不同品種混在一起比（例：高雄的韭菜混了很多韭菜黃），會看錯哪裡便宜。",
+    "【新增】比價可填運費（元/公斤），用「含運價」排最便宜；每列顯示比你的市場差多少、比各市場平均幾 %，價差 2 倍以上標「可能等級／包裝不同，先看貨」。",
+    "【新增】比價頁附回測說明：中部天天換市場進貨，運費 2 元/公斤時只省 0.3%，不填運費反而可能多花 → 一定要填運費。",
+    "【新增】看板頂端「今天進貨參考」：比平常便宜可多進、偏貴先少進的菜，附產地西螺「同品種」比價（按 ✕ 收起）。",
+    "【新增】詳細頁「零售參考」：臺北市公有市場零售價，附零售大約是批發的幾倍。",
+    "【新增】量能說明（缺貨型價格／可能盛產）、你的市場今天休市時直接提醒。",
+    "【改善】行情改成每天早上 5 點半到中午每小時更新。",
+  ]},
   {v:"v1.7.4", date:"2026-10-31", title:"天氣颱風資料過期就不顯示 🌀", items:[
     "【修正】天氣預報超過 2 天、颱風警報超過 1 天沒更新就不顯示，不再把舊資料當成今天（曾出現 8 月的颱風一直掛著）。",
   ]},
@@ -754,6 +782,21 @@ async function loadWeather(){
     const up=Date.parse(String(j.updated||"").replace(" ","T")+"+08:00");
     if(j.active&&(!(up>0)||Date.now()-up>24*3600*1000))return Object.assign({},j,{active:false,stale:j.updated||"未知"});
     return j;}catch(e){return {active:false};}}
+/* 零售參考（臺北市公有零售市場月均，scripts/fetch_retail.py）：每種菜各自的「零售÷批發」倍數，
+   實測中位數 2.8 倍、但甘藍約 5 倍／空心菜約 1.7 倍 → 不能用單一倍數。資料月份舊就標出來。 */
+let RETAIL=null;
+async function loadRetail(){try{const r=await fetch(`${resolveGhBase()}/retail.json`,{cache:"no-cache"});if(!r.ok)throw 0;
+  const j=await r.json();RETAIL=(j&&j.items)?j:null;}catch(e){RETAIL=null;}}
+/* 零售參考。2026-10 回測（docs/backtest.md F）：零售價很少跟著批發變動，「直接看最近的零售價」
+   （資料晚 1～6 個月，誤差中位數 8～15%）比「今天批發 × 倍數」（約 21%）準
+   → 先給零售價（換成使用者選的單位），倍數只當「大約加幾倍」的參考，不再用倍數推算零售區間。 */
+function retailHTML(disp,pv){const it=RETAIL&&RETAIL.items[wholesaleOf(disp)||disp];if(!it||!it.length||!pv)return "";
+  const cur=new Date();const age=ym=>(cur.getFullYear()-(+ym.slice(0,4)))*12+(cur.getMonth()+1-(+ym.slice(5,7)));
+  const L=it.slice(0,3);
+  return `<div class="retail">🏷️ 零售參考（臺北市公有市場）：`+L.map(x=>`${x.item} <b>${pxU(x.latest[1]/0.6).toFixed(0)}</b> ${unitU()}（${x.latest[0]}）`).join("、")+
+    `<small>零售大約是台北一批發的 `+L.map(x=>`${L.length>1?x.item+" ":""}${x.mult} 倍（中間一半 ${x.lo}～${x.hi} 倍）`).join("、")+
+    `。回測：零售價很少跟著批發變動，定價直接參考上面的零售價（誤差中位數 8～15%）比用批發價×倍數換算（約 21%）準。`+
+    (L.some(x=>age(x.latest[0])>3)?"⚠ 零售資料月份較舊，僅供參考":"")+`</small></div>`;}
 async function loadForecast(){
   try{const r=await fetch(`${resolveGhBase()}/weather_forecast.json`,{cache:"no-cache"});if(!r.ok)throw 0;
     const j=await r.json();if(!(j&&j.counties&&typeof j.counties==="object"))return {counties:{}};
@@ -868,12 +911,12 @@ function priceView(disp,variety){const es=sortedEntries(variety?variantSeries(di
   if(sm&&sm.l&&(!es.length||es[es.length-1][0]<=sm.d)){
     const last=[sm.d,sm.l];const diff=(sm.r!=null?sm.r-1:0)*100;const cls=sm.t||"mid";
     const say=cls==="up"?"偏貴":cls==="dn"?"偏便宜":"正常";const stale=Math.round(daysBetween(sm.d,todayISO()));
-    return {es:es.length?es:[last],last,avg:sm.l.avg,date:sm.d,diff,cls,say,stale,week:sm.w,sr:sm.sr,thin:!!sm.q};}
+    return {es:es.length?es:[last],last,avg:sm.l.avg,date:sm.d,diff,cls,say,stale,week:sm.w,sr:sm.sr,thin:!!sm.q,qr:(sm.qr!=null?sm.qr:null)};}
   if(!es.length)return null;const last=es[es.length-1];
   const base=median(es.slice(-90).map(e=>e[1].avg));const diff=base?((last[1].avg-base)/base*100):0;
   let cls,say;if(diff>10){cls="up";say="偏貴";}else if(diff<-10){cls="dn";say="偏便宜";}else{cls="mid";say="正常";}
   const stale=Math.round(daysBetween(last[0],todayISO()));
-  return {es,last,avg:last[1].avg,date:last[0],diff,cls,say,stale,week:null,sr:null,thin:false};}
+  return {es,last,avg:last[1].avg,date:last[0],diff,cls,say,stale,week:null,sr:null,thin:false,qr:null};}
 /* 漲跌：優先「較上週」（7～11 天前那段的價；冷門品項那段沒成交就不硬比），沒有才退回「較上一筆」 */
 function chgInfo(pv){let p=null,lbl="";
   if(pv&&pv.week!=null){p=pv.week;lbl="較上週";}
@@ -881,11 +924,17 @@ function chgInfo(pv){let p=null,lbl="";
   if(p==null)return {dcls:"mid",arr:"",txt:"",lbl:"",pct:null};
   const dcls=p>0.05?"up":p<-0.05?"dn":"mid";
   return {dcls,arr:dcls==="up"?"▲":dcls==="dn"?"▼":"＝",txt:(p>=0?"+":"")+p.toFixed(1)+"%",lbl,pct:p};}
+/* 量能小標：只在明顯偏少/偏多時出現（回測：量縮不能預測之後會跌，所以只當「這個價是怎麼來的」的說明） */
+function qrChip(pv){if(!pv||pv.qr==null||pv.stale>14)return "";const q=Math.round(pv.qr*100);
+  if(pv.qr<=0.5)return ` <span class="qchip lo" title="近 3 日量是平常（近 90 天）的 ${q}%：缺貨型價格">量少 ${q}%</span>`;
+  if(pv.qr>=1.3)return ` <span class="qchip hi" title="近 3 日量是平常（近 90 天）的 ${q}%：可能盛產">量多 ${q}%</span>`;return "";}
 function cmpLineHTML(pv){
   const f=x=>(x>=0?"+":"")+x.toFixed(0)+"%";
   return `對比近 90 日 <b>${f(pv.diff)}</b>（${pv.say}）`+
     (pv.sr!=null?` · 比往年同期 <b>${f((pv.sr-1)*100)}</b>`:"")+
-    (pv.week!=null?` · 較上週 <b>${f(pv.week)}</b>`:"")+(pv.thin?` · <span class="thin">量少，價格容易大起大落</span>`:"");}
+    (pv.week!=null?` · 較上週 <b>${f(pv.week)}</b>`:"")+
+    (pv.qr!=null?` · 量是平常的 <b>${Math.round(pv.qr*100)}%</b>${pv.qr<=0.5?"（缺貨型價格）":pv.qr>=1.3?"（可能盛產）":""}`:"")+
+    (pv.thin?` · <span class="thin">成交量小，價格容易大起大落</span>`:"");}
 /* 品種資料：新格式 variants[母]={品種:{iso:{avg..}}} 逐日序列；相容舊格式(單筆最新價) */
 function variantRaw(disp){return (MVAR[MARKET]||{})[wholesaleOf(disp)]||{};}
 function _isSeries(v){if(!v||typeof v!=="object")return false;const k=Object.keys(v)[0];return k&&/^\d{4}-\d{2}-\d{2}$/.test(k);}
@@ -984,6 +1033,48 @@ function sortBoard(arr,pvOf){const k=boardSort();if(!k)return arr;
     if(k==="cheap"||k==="dear")return pv.diff;if(k==="up"||k==="dn")return chgInfo(pv).pct;return (pv.last&&pv.last[1].qty)||0;};
   const dir=(k==="cheap"||k==="dn")?1:-1;
   return arr.map(x=>[x,val(x)]).sort((a,b)=>((a[1]==null)-(b[1]==null))||(a[1]==null?0:dir*(a[1]-b[1]))).map(p=>p[0]);}
+/* 今日休市：後端從 API 的「休市」列收集各市場休市日（例：西螺週日），避免把「今天沒行情」誤會成資料壞了 */
+/* 每日摘要：用「對比近 90 日」與量能資料列出哪些菜比平常便宜、適合多進，＋跟產地西螺同品種比價
+   （使用者貼的台中進貨流程）。成交量太小或超過 7 天沒成交的不列。 */
+const DIGEST_KEY="jb_digest";
+function digestHTML(){
+  if(SEARCH.trim())return "";
+  const pvs=[];for(const c of availableCrops()){const pv=priceView(c);if(pv&&pv.stale<=7&&!pv.thin)pvs.push([c,pv]);}
+  if(pvs.length<3)return "";
+  const day=pvs.reduce((m,[,p])=>p.date>m?p.date:m,"");
+  let hidden="";try{hidden=localStorage.getItem(DIGEST_KEY)||"";}catch(e){}
+  if(hidden===day)return "";
+  const dear=pvs.filter(([,p])=>p.cls==="up").sort((a,b)=>b[1].diff-a[1].diff).slice(0,3);
+  const cheap=pvs.filter(([,p])=>p.cls==="dn").sort((a,b)=>a[1].diff-b[1].diff).slice(0,3);
+  const short=pvs.filter(([,p])=>p.qr!=null&&p.qr<=0.5).sort((a,b)=>a[1].qr-b[1].qr).slice(0,3);
+  const glut=pvs.filter(([,p])=>p.qr!=null&&p.qr>=1.3).sort((a,b)=>b[1].qr-a[1].qr).slice(0,3);
+  const fmt=l=>l.map(([c,p])=>`${c}（${p.diff>=0?"+":""}${p.diff.toFixed(0)}%）`).join("、");
+  const lines=[];
+  if(cheap.length)lines.push(`🟢 比平常便宜、適合多進：${fmt(cheap)}`);
+  if(dear.length)lines.push(`🔴 比平常貴、可少進或找替代：${fmt(dear)}`);
+  if(short.length)lines.push(`📉 量少（缺貨型價格）：${short.map(([c])=>c).join("、")}`);
+  if(glut.length)lines.push(`📦 量多（可能盛產）：${glut.map(([c])=>c).join("、")}`);
+  if(MARKET!=="西螺"){
+    /* 跟產地西螺比「同一個品種」（回測 E：母作物綜合價各市場品種組成不同，會把買到不同東西當成便宜）；
+       兩邊都沒分品種的作物才用母作物比。只列便宜 10% 以上、4 天內都有成交的。 */
+    const LV=(INDEX&&INDEX.latest_var)||{},LP=(INDEX&&INDEX.latest)||{};
+    const cmp=pvs.map(([c,p])=>{const w=wholesaleOf(c)||c;const xv=(LV["西螺"]||{})[w]||{},hv=(LV[MARKET]||{})[w]||{};
+      let x,h,lab="";
+      if(Object.keys(xv).length||Object.keys(hv).length){lab=mainVariety(c);x=xv[lab];h=hv[lab];}
+      else{x=(LP["西螺"]||{})[w];h={avg:p.avg,date:p.date};}
+      if(!(x&&h&&x.avg>0&&h.avg>0&&x.date&&h.date&&Math.abs(daysBetween(x.date,h.date))<=CMP_FRESH_DAYS))return null;
+      return [lab&&lab!==c?`${c}·${lab}`:c,(x.avg-h.avg)/h.avg*100];})
+      .filter(v=>v&&v[1]<=-10).sort((a,b)=>a[1]-b[1]).slice(0,3);
+    if(cmp.length)lines.push(`🚚 西螺同品種比${MARKET}便宜：${cmp.map(([c,d])=>`${c}（${d.toFixed(0)}%）`).join("、")}（還沒扣運費）`);}
+  if(!lines.length)return "";
+  const md=`${+day.slice(5,7)}/${+day.slice(8)}`;
+  return `<div class="digest"><div class="dg-t">🧾 今天進貨參考（${MARKET} ${md}）`+
+    `<button class="dg-x" type="button" data-day="${day}" aria-label="這一天不再顯示">✕</button></div>`+
+    lines.map(l=>`<div class="dg-l">${l}</div>`).join("")+
+    `<div class="dg-n">偏貴／偏便宜＝對比近 90 日中位數 ±10% 以上；量＝近 3 日 vs 平常。僅供參考。</div></div>`;}
+function closedNoteHTML(){const ent=((INDEX&&INDEX.markets)||[]).find(m=>m.name===MARKET);const cl=(ent&&ent.closed)||[];
+  const t=todayISO();if(!cl.includes(t))return "";
+  return `<div class="closedbar">🛑 今天（${+t.slice(5,7)}/${+t.slice(8)} 週${weekdayCh(t)}）${MARKET}休市，以下是上一個交易日的行情。</div>`;}
 function sortBarHTML(){const k=boardSort();return `<div class="sortbar"><label>排序 <select id="bSort">${SORTS.map(([v,n])=>`<option value="${v}"${v===k?" selected":""}>${n}</option>`).join("")}</select></label></div>`;}
 function renderBoard(){
   // 顯示列表、隱藏詳細（若剛從詳細返回）
@@ -1003,6 +1094,10 @@ function renderBoard(){
   const el=document.getElementById("board");el.innerHTML="";
   el.insertAdjacentHTML("beforeend",sortBarHTML());const bsel=el.querySelector("#bSort");
   if(bsel)bsel.onchange=e=>{try{localStorage.setItem(SORT_KEY,e.target.value);}catch(_){}renderBoard();};
+  const cnote=closedNoteHTML();if(cnote)el.insertAdjacentHTML("beforeend",cnote);
+  const dg=digestHTML();
+  if(dg){el.insertAdjacentHTML("beforeend",dg);const x=el.querySelector(".dg-x");
+    if(x)x.onclick=()=>{try{localStorage.setItem(DIGEST_KEY,x.dataset.day);}catch(_){}renderBoard();};}
   const list=sortBoard(boardList(),c=>priceView(c));
   if(!list.length){el.innerHTML=searching
     ?`<div class="empty">找不到「${SEARCH.trim()}」。換個關鍵字，或此市場未交易該品項。</div>`
@@ -1026,7 +1121,7 @@ function renderBoard(){
       const ci=chgInfo(pv);const dcls=ci.dcls,arr=ci.arr;
       const tag=pv.stale>14?`<span class="tag season">非當季·最後成交 ${pv.date.slice(5)}</span>`:`<span class="tag ${pv.cls}">${pv.say}</span>`;
       leftInner=`<div class="mc-nm">${disp}${hasVar?` <span class="mc-vhint">${vlabels.length} 品種</span>`:""}</div>
-        <div class="mc-sub">${tag}${leftHint}</div>`;
+        <div class="mc-sub">${tag}${qrChip(pv)}${leftHint}</div>`;
       rightInner=`<span class="mc-px"><span class="mc-v mono">${pxU(pv.avg).toFixed(1)}</span><span class="mc-u">${unitU()}</span></span>
         <span class="mc-meta"><span class="mc-chg ${dcls} mono">${ci.lbl?`<small>${ci.lbl}</small>`:""}${arr}${ci.txt}</span>${hasVar?`<span class="mc-comb">綜合</span>`:""}</span>`;
       // 綜合(多品種)不連 K線，改為展開品種；單品項才進 K線
@@ -1055,7 +1150,7 @@ function buildVarietyCard(disp,variety){
   }else{
     const ci=chgInfo(pv);const dcls=ci.dcls,arr=ci.arr;
     const tag=pv.stale>14?`<span class="tag season">非當季·最後成交 ${pv.date.slice(5)}</span>`:`<span class="tag ${pv.cls}">${pv.say}</span>`;
-    leftInner=`<div class="mc-nm">${variety}</div><div class="mc-sub">${tag}<span class="mc-info">ⓘ 說明</span></div>`;
+    leftInner=`<div class="mc-nm">${variety}</div><div class="mc-sub">${tag}${qrChip(pv)}<span class="mc-info">ⓘ 說明</span></div>`;
     rightInner=`<span class="mc-px"><span class="mc-v mono">${pxU(pv.avg).toFixed(1)}</span><span class="mc-u">${unitU()}</span></span>
       <span class="mc-meta"><span class="mc-chg ${dcls} mono">${ci.lbl?`<small>${ci.lbl}</small>`:""}${arr}${ci.txt}</span></span>`;
     rightAction=()=>openDetail(disp,variety);
@@ -1095,7 +1190,7 @@ function renderDetail(disp,variety){
       <h3><span>${disp}${varTitle?` <small class="vtag">${varTitle}</small>`:""}</span><span class="mktbadge">${MARKET} 批發</span></h3>
       <div class="price"><span class="v ${cls} mono">${pxU(pv.avg).toFixed(1)}</span><span class="u">${u}</span>
         <span class="chg ${cls} mono">${arrow} ${chg>=0?"+":""}${pxU(chg).toFixed(1)} (${chgP>=0?"+":""}${chgP.toFixed(1)}%)</span></div>
-      ${roleNoteHTML(pv.avg)}
+      ${roleNoteHTML(pv.avg)}${retailHTML(disp,pv)}
       <div class="ohlc"><span>最高 <b>${pxU(hi).toFixed(1)}</b></span><span>最低 <b>${pxU(lo).toFixed(1)}</b></span>
         <span>量 <b>${(qty!=null?qty:0).toLocaleString()}</b> 公斤</span></div>
       ${gradeBandHTML(disp,pv.last[1],true)}
@@ -1163,16 +1258,17 @@ function monthHeatHTML(s){const mi=Core.monthIndex(s);if(mi.filter(x=>x.idx!=nul
     const c=v==null?"na":v>=1.15?"hi2":v>=1.05?"hi":v<=0.85?"lo2":v<=0.95?"lo":"mid";
     return `<div class="mh ${c}${x.m===cur?" now":""}"><b>${x.m}月</b><small>${v==null?"–":Math.round(v*100)+"%"}</small></div>`;}).join("")+
     `</div><div class="mh-n">數字＝該月中位價是全年中位數的幾 %；外框＝本月。</div></div>`;}
-/* 開價檢查：對方報價 vs 當日批發上/中/下價（農友比「扣 6% 手續費後實得」） */
+/* 開價檢查：對方報價 vs 當日批發上/中/下價（農友比「扣手續費後實得」，比例在採收預判的成本區可調） */
 function offerHTML(pv){const farmer=APP!=="merchant";const tai=UNIT==="tai";
   return `<details class="offer"><summary>💰 ${farmer?"販仔開價檢查":"報價檢查"}（跟 ${pv.date.slice(5)} 批發價比）</summary>
     <div class="of-row"><input id="ofPrice" type="number" inputmode="decimal" min="0" step="0.1" placeholder="${farmer?"對方收購價":"供應商報價"}" aria-label="價格">
       <select id="ofUnit" aria-label="單位"><option value="kg"${tai?"":" selected"}>元/公斤</option><option value="jin"${tai?" selected":""}>元/台斤</option></select></div>
     <div class="of-res" id="ofRes">輸入價格，馬上跟上價／中價／下價比。</div></details>`;}
 function bindOffer(pv){const ip=document.getElementById("ofPrice"),us=document.getElementById("ofUnit"),out=document.getElementById("ofRes");
-  if(!ip||!us||!out)return;const go=()=>{const r=Core.judgeOffer(ip.value,us.value,pv.last[1],APP!=="merchant"?"farmer":"merchant");
+  if(!ip||!us||!out)return;const fee=(typeof feeRate==="function")?feeRate():0.06;
+  const go=()=>{const r=Core.judgeOffer(ip.value,us.value,pv.last[1],APP!=="merchant"?"farmer":"merchant",fee);
     if(!r){out.className="of-res";out.textContent="輸入價格，馬上跟上價／中價／下價比。";return;}
-    out.className="of-res "+r.level;out.innerHTML=`約 <b>${r.perKg}</b> 元/公斤：${r.text}<small>（參考：上 ${r.ref.hi.toFixed(1)}・中 ${r.ref.mid.toFixed(1)}・下 ${r.ref.lo.toFixed(1)} 元/公斤${APP!=="merchant"?"，已扣手續費約 6%":""}）</small>`;};
+    out.className="of-res "+r.level;out.innerHTML=`約 <b>${r.perKg}</b> 元/公斤：${r.text}<small>（參考：上 ${r.ref.hi.toFixed(1)}・中 ${r.ref.mid.toFixed(1)}・下 ${r.ref.lo.toFixed(1)} 元/公斤${APP!=="merchant"?"，已扣手續費約 "+Math.round(fee*1000)/10+"%":""}）</small>`;};
   ip.oninput=go;us.onchange=go;}
 /* 均價折線 + 漸層面積 + 高低區間帶（乾淨好看），查價線由 attachCross 疊上 */
 let QLY=false;
@@ -1703,15 +1799,33 @@ function populateCompareCrops(){const sel=document.getElementById("cmpCrop");if(
 function cmpVarieties(crop){const w=cropMap()[crop];const lv=(INDEX&&INDEX.latest_var)||{};const set=new Set();
   for(const mk of marketNames()){const m=lv[mk];if(m&&m[w])Object.keys(m[w]).forEach(v=>set.add(v));}
   return [...set].sort();}
+/* 主要品種＝各市場最新一天成交量加總最大的品種（「其他」「進口」不算）。
+   2026-10 回測（docs/backtest.md E）：「全部綜合」是各市場所有品種混在一起的均價，各市場賣的品種不一樣
+   （例：高雄的韭菜混了很多韭菜黃、屏東多是白頭），拿來比會把「買到不同東西」誤當成便宜 → 預設改比主要品種。 */
+function mainVariety(crop){const w=cropMap()[crop];const lv=(INDEX&&INDEX.latest_var)||{};const q={};
+  for(const mk of marketNames()){const m=lv[mk]&&lv[mk][w];if(!m)continue;
+    for(const [v,c] of Object.entries(m)){if(v==="其他"||v.includes("進口"))continue;q[v]=(q[v]||0)+((c&&c.qty)||0)+1;}}
+  let best="",bq=-1;for(const [v,x] of Object.entries(q))if(x>bq){best=v;bq=x;}return best;}
 function populateCmpVar(){const sel=document.getElementById("cmpVar");if(!sel)return;
   const crop=document.getElementById("cmpCrop").value;const vs=cmpVarieties(crop);const cur=sel.value;
+  const same=sel.dataset.crop===crop;sel.dataset.crop=crop;
   if(!vs.length){sel.style.display="none";sel.innerHTML="";return;}
   sel.style.display="";
-  sel.innerHTML=`<option value="">🍴 全部綜合</option>`+vs.map(v=>`<option value="${v}">${v}</option>`).join("");
-  sel.value=(cur&&vs.includes(cur))?cur:"";}
+  sel.innerHTML=`<option value="">🍴 全部綜合（各市場品種不同，僅參考）</option>`+vs.map(v=>`<option value="${v}">${v}</option>`).join("");
+  sel.value=(same&&(cur===""||vs.includes(cur)))?cur:(mainVariety(crop)||"");}   // 同一作物保留使用者自己選的（含全部綜合）
 document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>switchTab(t.dataset.t)));
 
 const CMP_FRESH_DAYS=4;   // 比價只採計最新成交日前 4 天內的報價（涵蓋週日＋週一休市）
+/* 回測結論（scripts/backtest.py E，2026-10；數字改了要同步改 docs/backtest.md）：讓使用者知道「每天換市場」實際能省多少 */
+const CMP_BT_NOTE=`<details class="cmpbt"><summary>跨市場進貨真的比較省嗎？（回測）</summary>
+  <p>用 2025-10～2026-10 的資料模擬：每天收市看這頁，隔天去「含運最便宜」的同區市場買<b>同一個品種</b>（路上損耗另算 3%）。</p>
+  <p>・<b>中部</b>（台中比豐原、南投、溪湖、永靖、西螺、東勢）：運費 2 元/公斤時只省 0.3%，3 元以上就打平或虧；
+  沒填運費、只看最便宜，運費 5 元時反而多花 2.8% → <b>一定要填運費</b>。</p>
+  <p>・<b>北部、高雄一帶</b>：看起來省 2 成左右，但幾乎天天都是同一個市場比較便宜，多半是等級、包裝不同
+  （例：白頭韭菜高雄 86 元、屏東 16 元）→ 換市場前先看貨、少量試買。</p>
+  <p>・真的有比較便宜的市場時，固定去那裡就拿到大部分好處；天天換市場只多省 0～2%。</p></details>`;
+/* 運費（元/公斤，從別的市場運回你的市場）：設了才把「含運價」拿來排最便宜，避免為了便宜 2 元跑遠路反而虧 */
+function freightPerKg(){const v=parseFloat((()=>{try{return localStorage.getItem("jb_freight");}catch(e){return null;}})());return (v>0&&v<200)?v:0;}
 function renderCompare(){
   const crop=document.getElementById("cmpCrop").value;const box=document.getElementById("cmpResult");
   const vsel=document.getElementById("cmpVar");const variety=(vsel&&vsel.style.display!=="none")?vsel.value:"";
@@ -1728,12 +1842,27 @@ function renderCompare(){
      （否則會把 8 月的價格拿來跟今天比，誤導進貨） */
   const newest=rows.reduce((m,r)=>r.date>m?r.date:m,"");
   rows.forEach(r=>{r.stale=!!(r.date&&newest)&&(Date.parse(newest)-Date.parse(r.date))/86400000>CMP_FRESH_DAYS;});
-  rows.sort((a,b)=>(a.stale-b.stale)||(a.avg-b.avg));
+  const fr=freightPerKg();rows.forEach(r=>{r.eff=r.avg+(r.mk===MARKET?0:fr);});   // 含運價：別的市場要加運回來的運費
+  rows.sort((a,b)=>(a.stale-b.stale)||(a.eff-b.eff));
+  const fresh=rows.filter(r=>!r.stale);const allAvg=fresh.length?fresh.reduce((s,r)=>s+r.avg,0)/fresh.length:null;
+  const home=fresh.find(r=>r.mk===MARKET);
+  const sg=x=>(x>=0?"+":"−")+pxU(Math.abs(x)).toFixed(1);
+  /* 跟各市場中位數差 2 倍以上：回測裡這種價差幾乎天天都在（例：同叫「白頭韭菜」高雄 86 元、屏東 16 元），
+     多半是等級、包裝、交易方式不同，不是真的便宜那麼多 → 提醒先看貨 */
+  const fps=fresh.map(r=>r.avg).sort((a,b)=>a-b);const med=fps.length>=3?fps[Math.floor(fps.length/2)]:null;
+  const odd=r=>med&&!r.stale&&(r.avg<med/2||r.avg>med*2);
+  const extra=r=>r.stale?"":(r.mk===MARKET?" · 你的市場":(home?` · 比${MARKET} ${sg(r.avg-home.avg)}`:""))+
+    (allAvg?` · 比各市場平均 ${r.avg>=allAvg?"+":""}${((r.avg/allAvg-1)*100).toFixed(0)}%`:"")+
+    (fr>0&&r.mk!==MARKET?` · 含運 ${pxU(r.eff).toFixed(1)}`:"")+
+    (odd(r)?` · <em class="cmpodd">⚠ 價差特別大，可能等級／包裝不同，先看貨</em>`:"");
+  const mixed=!variety&&vsel&&vsel.style.display!=="none";
   box.innerHTML=(variety?`<p class="mkt-label">正在比 <b>${crop}·${variety}</b> 各市場價（低→高）</p>`:"")+
+    (mixed?`<p class="mkt-label cmpmix">⚠ 全部綜合＝各市場所有品種混在一起的均價，各市場賣的品種不一樣，比起來不準；建議在上面選品種。</p>`:"")+
     rows.map((r,i)=>`<button class="cmprow ${i===0&&!r.stale?'cheap':''}${r.stale?' old':''}" data-mk="${r.mk}">
-    <span class="rk">${i+1}</span><span class="mk">${r.mk}<small>${r.date}</small></span>
+    <span class="rk">${i+1}</span><span class="mk">${r.mk}<small>${r.date}${extra(r)}</small></span>
     <span class="pv mono">${pxU(r.avg).toFixed(1)}</span><span class="pu">${unitU()}</span>
-    ${i===0&&!r.stale?'<span class="best">最便宜</span>':''}${r.stale?'<span class="best oldtag">舊價</span>':''}<span class="chev">›</span></button>`).join("");
+    ${i===0&&!r.stale?'<span class="best">最便宜</span>':''}${r.stale?'<span class="best oldtag">舊價</span>':''}<span class="chev">›</span></button>`).join("")+
+    CMP_BT_NOTE;
   box.querySelectorAll(".cmprow").forEach(el=>el.onclick=()=>openCompareRow(el.dataset.mk,crop,variety));   // 點進去看該市場 K線(帶品種)
 }
 /* #2 從比價點某市場 → 切到行情看板、載入該市場、開該作物(可帶品種) K線 */
@@ -1746,6 +1875,9 @@ async function openCompareRow(mk,crop,variety){
 }
 document.getElementById("cmpCrop").addEventListener("change",()=>{populateCmpVar();renderCompare();});
 document.getElementById("cmpVar").addEventListener("change",renderCompare);
+{const fi=document.getElementById("cmpFreight");if(fi){const v=freightPerKg();if(v)fi.value=v;
+  let ft=null;fi.addEventListener("input",()=>{try{const s=fi.value.trim();if(s==="")localStorage.removeItem("jb_freight");
+    else localStorage.setItem("jb_freight",String(Math.max(0,+s||0)));}catch(_){}clearTimeout(ft);ft=setTimeout(renderCompare,250);});}}
 
 function applyRole(){
   // 精準進貨：行情看板／跨市場比價／天氣 三個分頁
@@ -1803,7 +1935,7 @@ window.addEventListener("orientationchange",()=>setTimeout(syncTopbar,200));
   await loadMarket(MARKET);
   WEVENTS=await loadEvents();
   renderBoard();   // 預設進看板清單；點一項才進詳細頁（K線+逐日明細）
-  WEATHER=await loadWeather();FORECAST=await loadForecast();
+  WEATHER=await loadWeather();FORECAST=await loadForecast();loadRetail();
   applyRole();   // 顯示/隱藏分頁
   syncTopbar();  // 頂列高度 → 看板列黏在其下方
   maybeShowWhatsNew();   // 改版後第一次開啟：自動跳「更新內容」一次

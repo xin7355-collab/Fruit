@@ -118,6 +118,76 @@ async function checkNewFeatures(page, name, json, base) {
   check(/元\/公斤/.test(res) && /(划算|合理|偏貴|太貴|很好|偏低|壓價)/.test(res), `${name} 開價檢查有結論（${res.slice(0, 24)}…）`);
   check((await page.textContent("#qcap")).includes("去年同期"), `${name} 走勢圖有去年同期虛線`);
   check(await noHScroll(page), `${name} 新功能沒有造成橫向捲動`);
+  if (name === "merchant") {
+    // 零售參考：塞一筆零售倍數，詳細頁要出現零售價與推算區間
+    await page.evaluate(() => { const c = wholesaleOf(DETAIL) || DETAIL;
+      RETAIL = { items: { [c]: [{ item: c, latest: ["2025-12", 60], mult: 3, lo: 2.5, hi: 3.5, n: 12 }] } }; renderDetail(DETAIL, CURVAR); });
+    const rt = (await page.textContent("#mktDetail .retail").catch(() => "")) || "";
+    check(rt.includes("零售參考") && rt.includes("倍") && rt.includes("較舊"), `merchant 詳細頁顯示零售參考（含資料月份較舊提示）`);
+  }
+  // 每日摘要：有就要能按 ✕ 收起（同一個資料日不再出現）
+  await page.goto(page.url(), { waitUntil: "networkidle" });
+  if (await page.locator("#clModal.on").count()) await page.click("#closeCl");
+  const dgN = await page.locator(".digest").count();
+  check(dgN === 1, `${name} 看板頂端有每日摘要（${name === "merchant" ? "今天進貨參考" : "今日提示"}）`);
+  if (dgN) {
+    const dgTxt = await page.textContent(".digest");
+    check(name === "merchant" ? /適合多進|少進|西螺|量/.test(dgTxt) : /適合出貨|便宜|量/.test(dgTxt), `${name} 摘要內容依角色不同（${dgTxt.slice(0, 26)}…）`);
+    await page.click(".dg-x");
+    await page.waitForTimeout(300);
+    check(await page.locator(".digest").count() === 0, `${name} 按 ✕ 後摘要收起`);
+    await page.evaluate((k) => localStorage.removeItem(k), name === "merchant" ? "jb_digest" : "vs_digest");
+  }
+  if (name === "merchant") {
+    await page.click('.tab[data-t="compare"]');
+    await page.waitForTimeout(400);
+    const sm = await page.evaluate(() => [...document.querySelectorAll(".cmprow small")].map((s) => s.textContent).join("|"));
+    check(sm.includes("比各市場平均") && (sm.includes("你的市場") || sm.includes("比")), `merchant 比價列有「比你的市場」「比各市場平均」`);
+    await page.fill("#cmpFreight", "5");
+    await page.waitForTimeout(500);
+    const sm2 = await page.evaluate(() => [...document.querySelectorAll(".cmprow small")].map((s) => s.textContent).join("|"));
+    check(sm2.includes("含運") && (await page.evaluate(() => localStorage.getItem("jb_freight"))) === "5", "merchant 填運費後顯示含運價、並記住設定");
+    check(await noHScroll(page), "merchant 比價頁加資訊後沒有橫向捲動");
+    await page.screenshot({ path: path.join(OUT, "merchant-compare-new.png") });
+    await page.fill("#cmpFreight", "");
+    // 回測發現「全部綜合」會把不同品種混著比 → 預設比主要品種；選全部綜合要有提醒；價差 2 倍以上要標示
+    const pick = await page.evaluate(() => { const sel = document.getElementById("cmpCrop");
+      const c = [...sel.options].map((o) => o.value).find((v) => cmpVarieties(v).length > 1); if (!c) return null;
+      sel.value = c; sel.dispatchEvent(new Event("change")); return { c, v: document.getElementById("cmpVar").value }; });
+    if (pick) {
+      check(pick.v !== "", `merchant 比價預設比主要品種（${pick.c}·${pick.v}），不是全部綜合`);
+      await page.selectOption("#cmpVar", "");
+      await page.waitForTimeout(300);
+      check(await page.locator(".cmpmix").count() === 1, "merchant 選「全部綜合」時提醒各市場品種不同");
+    }
+    const odd = await page.evaluate(() => { const w = cropMap()[document.getElementById("cmpCrop").value];
+      const mks = marketNames().filter((m) => INDEX.latest[m] && INDEX.latest[m][w]); if (mks.length < 3) return false;
+      INDEX.latest[mks[0]][w] = { ...INDEX.latest[mks[0]][w], avg: INDEX.latest[mks[0]][w].avg * 10 }; renderCompare(); return true; });
+    if (odd) check(await page.locator(".cmpodd").count() >= 1, "merchant 價差 2 倍以上的市場標「可能等級／包裝不同」");
+    check(await page.locator("details.cmpbt").count() === 1, "merchant 比價頁附回測說明（跨市場進貨真的比較省嗎）");
+    check(await noHScroll(page), "merchant 比價頁加警示後沒有橫向捲動");
+    await page.click('.tab[data-t="market"]');
+  }
+  // 今日休市橫幅：把今天塞進這個市場的休市日，看板頂端要出現提示
+  await page.goto(page.url(), { waitUntil: "networkidle" });
+  if (await page.locator("#clModal.on").count()) await page.click("#closeCl");
+  await page.evaluate(() => { const e = INDEX.markets.find((m) => m.name === MARKET); e.closed = [...(e.closed || []), todayISO()]; renderBoard(); });
+  check(await page.locator(".closedbar").count() === 1, `${name} 休市日顯示「今天休市」提示`);
+  if (name === "farmer") {
+    // 手續費可調：設 10% 後，詳細頁「農民實得」要跟著變
+    await page.evaluate(() => { localStorage.setItem("vs_fee", "10"); });
+    const pr = page.locator(".mcard .mc-right:not(.nolink)");
+    if (await pr.count()) await pr.first().click(); else await page.locator(".mcard").first().click();
+    await page.waitForTimeout(500);
+    const note = (await page.textContent("#mktDetail .rolenote")) || "";
+    check(note.includes("10%"), `farmer 手續費設 10% 後「農民實得」跟著變（${note.slice(0, 30)}…）`);
+    // 產地價：塞一筆今天的產地價給這個作物，詳細頁要出現「產地價」與送拍賣的比較
+    const ok = await page.evaluate(() => { const c = wholesaleOf(DETAIL) || DETAIL;
+      ORIGIN = { items: { [c]: [{ name: c, latest: [todayISO(), 20], series: {} }] } }; renderDetail(DETAIL, CURVAR); return c; });
+    const ot = (await page.textContent("#mktDetail .origin").catch(() => "")) || "";
+    check(ot.includes("產地價") && ot.includes("送"), `farmer 詳細頁顯示產地價與送拍賣比較（${ok}）`);
+    await page.evaluate(() => localStorage.removeItem("vs_fee"));
+  }
   await page.screenshot({ path: path.join(OUT, `${name}-detail-new.png`), fullPage: true });
 }
 
@@ -191,7 +261,7 @@ async function visitTabs(page, name, tabs) {
   await m.page.click('.tab[data-t="compare"]');
   await m.page.waitForTimeout(500);
   const cmp = await m.page.evaluate(() => [...document.querySelectorAll(".cmprow")].map((el) => ({
-    cheap: el.classList.contains("cheap"), old: el.classList.contains("old"), date: (el.querySelector("small") || {}).textContent || "" })));
+    cheap: el.classList.contains("cheap"), old: el.classList.contains("old"), date: ((el.querySelector("small") || {}).textContent || "").slice(0, 10) })));   // 小字＝日期＋價差說明，只取日期
   const newest = cmp.reduce((a, r) => (r.date > a ? r.date : a), "");
   const cheap = cmp.find((r) => r.cheap);
   check(cmp.length > 0 && !!cheap, `merchant 比價有排名且有「最便宜」（${cmp.length} 個市場）`);
