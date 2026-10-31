@@ -6,7 +6,8 @@ notify.py  ——  精準務農的推播（讓農民、產銷班不必一直盯�
 兩種模式（管道都用環境變數；都沒設定 → dry-run 只印出訊息、exit 0）：
   1. 搶收（預設）：讀 harvest_advisory.json，颱風期間挑出「急迫」田區（立即搶收／deadline 逼近／PHI 兩難）。
      LINE 送 Flex 卡片（一田一列、顏色標決策、按鈕直接開「田園巡查」），webhook 送純文字。
-  2. 行情（--prices）：讀 prices_index.json＋該市場本月檔的看板摘要（sum），關注品項「偏便宜／偏貴」時推播。
+  2. 行情（--prices）：讀 prices_index.json＋該市場本月檔的看板摘要（sum），關注品項價格偏離近 90 天中位數 10% 以上時推播
+     （只寫數字「比近 90 天中位數低 23%」，不下「偏便宜」這類結論：回測準度只有 57～59%，2026-10-31 App 也拿掉了）。
      關注清單沒設定 → 視為「還沒設定」，安靜略過（不是錯誤）。
 
 管道：
@@ -157,9 +158,9 @@ def price_alerts(index_path, market, crops, state, now=None):
             further = abs(dev) - abs(prev.get("dev", 0))
             if days < PRICE_RESEND_DAYS and further < PRICE_RESEND_STEP:
                 continue                              # 7 天內、沒有再偏離 5 個百分點 → 不重送
-        word = "便宜" if s["t"] == "dn" else "貴"
+        word = "低" if s["t"] == "dn" else "高"
         line = (f"{'📉' if s['t'] == 'dn' else '📈'} {market} {crop} {s['l']['avg']:.1f} 元/公斤（{s['d'][5:]}），"
-                f"比近 90 日中位數{word} {abs(dev) * 100:.0f}%")
+                f"比近 90 天中位數{word} {abs(dev) * 100:.0f}%")
         if s.get("w") is not None:
             line += f"，較上週 {s['w']:+.0f}%"
         if s.get("q"):
@@ -243,7 +244,7 @@ def run_prices(args):
         print(f"[notify] 行情已推播（{'/'.join(sent)}），{len(msgs)} 則。" if sent else
               "[notify] 未設定任何通知管道（dry-run），行情訊息如下：\n" + text)
     else:
-        print(f"[notify] 行情：{market} 關注的 {len(crops)} 個品項沒有新的偏貴／偏便宜，略過。")
+        print(f"[notify] 行情：{market} 關注的 {len(crops)} 個品項價格沒有新的大幅偏離（±10%），略過。")
     with open(args.state, "w", encoding="utf-8") as f:
         json.dump(new_state, f, ensure_ascii=False, indent=2)
 

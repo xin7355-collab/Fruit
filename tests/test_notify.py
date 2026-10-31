@@ -47,7 +47,7 @@ def test_price_alerts_trigger_and_dedup(tmp_path):
     idx = write_market(tmp_path, {"甘藍": sig("2026-10-30", "dn", 0.80, -9.0), "小白菜": sig("2026-10-30", "mid", 1.02),
                                   "菠菜": sig("2026-10-20", "up", 1.30)})
     msgs, st = notify.price_alerts(idx, "西螺", ["甘藍", "小白菜", "菠菜"], {}, now=now)
-    assert len(msgs) == 1 and "甘藍" in msgs[0] and "便宜 20%" in msgs[0], "只有新鮮且偏離的才通知（菠菜是 10 天前的舊價）"
+    assert len(msgs) == 1 and "甘藍" in msgs[0] and "低 20%" in msgs[0], "只有新鮮且偏離的才通知（菠菜是 10 天前的舊價）"
     msgs2, _ = notify.price_alerts(idx, "西螺", ["甘藍"], st, now=now + timedelta(days=2))
     assert msgs2 == [], "7 天內、沒有再跌 5 個百分點 → 不重送"
     write_market(tmp_path, {"甘藍": sig("2026-11-01", "dn", 0.74)})

@@ -217,8 +217,27 @@ def season_signal(es):
     return ("up" if r >= TAG_HI else "dn" if r <= TAG_LO else "mid"), "s"
 
 
+MAIN_VAR_DAYS = 90                  # 主要品種：看近 90 天的成交量
+
+
+def main_variety(vv):
+    """多品種作物的主要品種＝近 90 天成交量合計最大的品種（「其他」「進口」不算；跟作物同名的也算）。
+    前端看板用它代替「綜合」均價（各品種混在一起平均，例：西瓜大果 11 元、小果 5 元，綜合 8.6 元兩邊都不像）。
+    可比的品種不到 2 個回 None。"""
+    labs = sorted(lab for lab in vv if lab != "其他" and IMPORT_MARK not in lab)
+    if len(labs) < 2:
+        return None
+    last = max((d for lab in labs for d in vv[lab]), default=None)
+    if not last:
+        return None
+    cut = (_d(last) - timedelta(days=MAIN_VAR_DAYS)).isoformat()
+    vol = {lab: sum((v or {}).get("qty") or 0 for d, v in vv[lab].items() if d >= cut) for lab in labs}
+    best = max(labs, key=lambda lab: (vol[lab], lab))
+    return best if vol[best] > 0 else None
+
+
 def summarize(mdata, variants):
-    """{作物: signal＋v:{品種: signal}}，前端看板直接用。"""
+    """{作物: signal＋v:{品種: signal}＋m:主要品種}，前端看板直接用。"""
     out = {}
     for c, s in mdata.items():
         sg = signal(s)
@@ -228,6 +247,9 @@ def summarize(mdata, variants):
         vs = {lab: sg for lab, sg in ((lab, signal(s)) for lab, s in vv.items()) if sg}
         if vs:
             out.setdefault(c, {})["v"] = vs
+            m = main_variety(vv)
+            if m:
+                out[c]["m"] = m
     return out
 
 

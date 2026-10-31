@@ -57,21 +57,36 @@ COLD_TEMP_C = 10               # 平地氣溫 ≤10°C 視為低溫/寒流量級
 
 
 def cwa_get(dataid, timeout=30, **params):
-    """呼叫 CWA REST API，回傳 records dict（失敗回 None）。timeout 可調（大資料集如全國逐時預報放寬）。"""
+    """呼叫 CWA REST API，回傳 records dict（失敗回 None）。
+    金鑰放 HTTP 標頭 Authorization（不放網址：網址會出現在錯誤訊息和記錄裡）；
+    少數資料集若不收標頭（401／403），這次執行改用網址參數，錯誤訊息一律遮蔽金鑰。"""
+    global _KEY_IN_URL
     key = os.environ.get("CWA_API_KEY")
     if not key or requests is None:
         return None
     url = f"{BASE}/{dataid}"
-    params = {"Authorization": key, "format": "JSON", **params}
     from http_retry import get_json, redact   # 延遲載入：沒裝 requests 時上面已提早 return
-    try:
-        # 逾時/5xx/429 指數退避重試；404 等 4xx 不重試（資料集代碼異動時立刻換下一個）
-        j = get_json(url, params=params, timeout=timeout, label=dataid)
-        # CWA 慣例：{ success, records: {...} }
-        return j.get("records")
-    except Exception as e:
-        print(f"[fetch_cwa] {dataid} 抓取失敗：{e}", file=sys.stderr)
-        return None
+    base = {"format": "JSON", **params}
+    for in_url in ((True,) if _KEY_IN_URL else (False, True)):
+        try:
+            # 逾時/5xx/429 指數退避重試；404 等 4xx 不重試（資料集代碼異動時立刻換下一個）
+            if in_url:
+                j = get_json(url, params={"Authorization": key, **base}, timeout=timeout, label=dataid)
+            else:
+                j = get_json(url, params=base, headers={"Authorization": key}, timeout=timeout, label=dataid)
+            return j.get("records")               # CWA 慣例：{ success, records: {...} }
+        except requests.HTTPError as e:
+            code = getattr(getattr(e, "response", None), "status_code", None)
+            if not in_url and code in (401, 403):
+                _KEY_IN_URL = True
+                print(f"[fetch_cwa] {dataid} 不收標頭金鑰（HTTP {code}）→ 這次改用網址參數", file=sys.stderr)
+                continue
+            print(f"[fetch_cwa] {dataid} 抓取失敗：{redact(e)}", file=sys.stderr)
+            return None
+        except Exception as e:
+            print(f"[fetch_cwa] {dataid} 抓取失敗：{redact(e)}", file=sys.stderr)   # 遮蔽金鑰
+            return None
+    return None
 
 
 def haversine_km(lat1, lng1, lat2, lng2):
@@ -84,6 +99,9 @@ def haversine_km(lat1, lng1, lat2, lng2):
 
 
 # ─────────────── 颱風解析（W-C0034-005 路徑潛勢；已用巴威真實回應校準） ───────────────
+_KEY_IN_URL = False   # 標頭金鑰被拒過一次，這次執行就直接用網址參數（不再每個資料集白打一次）
+
+
 def _num(x):
     try:
         return float(x)
@@ -122,8 +140,40 @@ def _forecast_track(tc):
         out.append({"t": t, "lat": lat, "lng": lng,
                     "r15": _num(c15.get("Radius")) or 0.0 if isinstance(c15, dict) else 0.0,
                     "r25": _num(c25.get("Radius")) or 0.0 if isinstance(c25, dict) else 0.0,
+                    "r70": _num(fx.get("Radius70PercentProbability")) or 0.0,
+                    "wind": _num(fx.get("MaxWindSpeed")),
                     "gust": _num(fx.get("MaxGustSpeed"))})
     return out
+
+
+PAST_HOURS = 120   # 已發生路徑只留最近 5 天（地圖不用畫到 10 天前生成的地方，檔案也小）
+
+
+def _analysis_track(tc, now):
+    """已發生路徑（AnalysisData.Fix）：時間、位置、強度；最後一筆＝目前位置（含暴風圈半徑、移動方向速度）。"""
+    ad = tc.get("AnalysisData") or tc.get("analysisData") or {}
+    fixes = (ad.get("Fix") or ad.get("fix")) if isinstance(ad, dict) else None
+    if isinstance(fixes, dict):
+        fixes = [fixes]
+    out = []
+    for fx in fixes or []:
+        lat, lng = _num(fx.get("CoordinateLatitude")), _num(fx.get("CoordinateLongitude"))
+        t = _parse_cwa_time(str(fx.get("DateTime") or fx.get("FixTime") or ""))
+        if lat is None or lng is None or not t:
+            continue
+        c15, c25 = fx.get("Circle15ms") or {}, fx.get("Circle25ms") or {}
+        out.append({"t": t, "lat": lat, "lng": lng, "wind": _num(fx.get("MaxWindSpeed")),
+                    "gust": _num(fx.get("MaxGustSpeed")), "pres": _num(fx.get("Pressure")),
+                    "r15": (_num(c15.get("Radius")) or 0.0) if isinstance(c15, dict) else 0.0,
+                    "r25": (_num(c25.get("Radius")) or 0.0) if isinstance(c25, dict) else 0.0,
+                    "dir": fx.get("MovingDirection"), "spd": _num(fx.get("MovingSpeed"))})
+    out.sort(key=lambda x: x["t"])
+    cut = now - timedelta(hours=PAST_HOURS)
+    return [x for x in out if x["t"] >= cut] or out[-1:]
+
+
+def _iso(t):
+    return t.isoformat() if t else None
 
 
 def eval_typhoon(path_records, now, ref_lat=REF_LAT, ref_lng=REF_LNG):
@@ -162,10 +212,18 @@ def eval_typhoon(path_records, now, ref_lat=REF_LAT, ref_lng=REF_LNG):
         # 精簡逐時軌跡（供前端以「田區座標」自算各地侵襲機率）：時間 ISO + 位置 + 暴風圈半徑
         track_out = [{"t": p["t"].isoformat() if p["t"] else None,
                       "lat": round(p["lat"], 3), "lng": round(p["lng"], 3),
-                      "r15": round(p["r15"] or 0), "r25": round(p["r25"] or 0),
-                      "gust": p["gust"]} for p in track]
+                      "r15": round(p["r15"] or 0), "r25": round(p["r25"] or 0), "r70": round(p["r70"] or 0),
+                      "wind": p["wind"], "gust": p["gust"]} for p in track]
+        past = _analysis_track(tc, now)
+        cur = past[-1] if past else None
+        past_out = [{"t": _iso(x["t"]), "lat": round(x["lat"], 2), "lng": round(x["lng"], 2), "wind": x["wind"]}
+                    for x in past]
+        now_out = ({"t": _iso(cur["t"]), "lat": round(cur["lat"], 2), "lng": round(cur["lng"], 2),
+                    "wind": cur["wind"], "gust": cur["gust"], "pres": cur["pres"], "r15": round(cur["r15"] or 0),
+                    "r25": round(cur["r25"] or 0), "dir": cur["dir"], "spd": cur["spd"]} if cur else None)
         cand = {"name": name, "min_dist": round(min_dist), "invade_prob": round(prob, 2),
-                "eta_iso": eta_iso, "eta_text": eta_text, "gust": gust, "track": track_out}
+                "eta_iso": eta_iso, "eta_text": eta_text, "gust": gust, "track": track_out,
+                "past": past_out, "now": now_out}
         if best is None or cand["invade_prob"] > best["invade_prob"] or \
                 (cand["invade_prob"] == best["invade_prob"] and cand["min_dist"] < best["min_dist"]):
             best = cand
@@ -632,7 +690,7 @@ def main():
             "tracking": (not threatening),
             "name": typ["name"],
             "warning": (warn_info["text"] if warn_info["land_warning"]
-                        else ("颱風接近中" if threatening else "追蹤中，對雲林暫無直接威脅")),
+                        else ("颱風接近中" if threatening else "追蹤中，暫無直接威脅")),
             "land_warning": warn_info["land_warning"],
             "invade_prob": typ["invade_prob"],
             "eta_iso": typ["eta_iso"],
@@ -643,6 +701,8 @@ def main():
             "rain": rain_multi,
             "forecast_gust_ms": typ["gust"],
             "track": typ["track"],
+            "past": typ.get("past"),
+            "now": typ.get("now"),
         }
     else:
         status = {
@@ -650,7 +710,7 @@ def main():
             "active": False, "tracking": False, "name": None, "warning": None,
             "land_warning": False, "invade_prob": None, "eta_iso": None, "eta_text": None,
             "min_dist_km": None, "rain_24h_mm": rain24, "rain_1h_mm": rain1, "rain": rain_multi,
-            "forecast_gust_ms": None, "track": None,
+            "forecast_gust_ms": None, "track": None, "past": None, "now": None,
         }
 
     with open("typhoon_status.json", "w", encoding="utf-8") as f:

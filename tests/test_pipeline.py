@@ -531,3 +531,18 @@ def test_backfill_budget_and_failures(fp, pc, tmp_path, monkeypatch):
     assert "2021-11-01" in pc.read_archive(ents[0]["archive"]["2021"])["甘藍"], "5 年前對齊月初（2021-11 起）"
     rec = json.load(open(paths["recent"]))
     assert "甘藍" in rec["sum"], "回填後重算看板摘要"
+
+
+def test_main_variety_counts_same_name_and_recent_volume(pc):
+    """主要品種：跟作物同名的品種也算（香蕉最大宗的品種就叫「香蕉」）；「其他」「進口」不算；只看近 90 天成交量。"""
+    def ser(days, qty, start="2026-07-01"):
+        d0 = date.fromisoformat(start)
+        return {(d0 + timedelta(days=i)).isoformat(): {"avg": 30.0, "qty": qty} for i in range(days)}
+    vv = {"香蕉": ser(100, 20000), "芭蕉紅芭蕉": ser(100, 800), "其他": ser(100, 90000), "進口": ser(100, 50000)}
+    assert pc.main_variety(vv) == "香蕉"
+    # 很久以前量大、最近沒量的品種，不算主要品種
+    old = {"大西瓜": ser(30, 99999, start="2026-01-01"), "黃肉": ser(100, 2000, start="2026-07-01")}
+    assert pc.main_variety(old) == "黃肉"
+    assert pc.main_variety({"香蕉": ser(10, 100), "其他": ser(10, 100)}) is None    # 可比的不到 2 個
+    s = pc.summarize({"香蕉": ser(100, 21000)}, {"香蕉": vv})
+    assert s["香蕉"]["m"] == "香蕉" and "芭蕉紅芭蕉" in s["香蕉"]["v"]
