@@ -100,6 +100,8 @@
       回測 E 顯示會把「買到不同東西」當成便宜。價差 2 倍以上標「可能等級／包裝不同」；運費欄 `jb_freight`（元/公斤）。
     - **行情排程**：台灣 05–12 時每小時＋14 時（merchant 晚 30 分）；每月第一次（或格式變、`--full`）整段重抓 2 年，
       其餘只抓近 14 天（index `last_full`）；`seen` 記每個交易日第一次抓到的時間。
+      GitHub 排程常漏跑（實測 10 小時只跑 5 次）→ 天氣工作流最後一步 `scripts/kick_prices.sh` 在行情時段發現行情 55 分鐘沒跑就用
+      workflow_dispatch 補（GITHUB_TOKEN 可觸發 dispatch，不需外部權杖；需 `actions: write`）。
     - **5 年封存** `prices/archive/NN_YYYY.json`（只有務農，`ARCHIVE_YEARS=5`）：滑出 2 年窗的資料搬進去；回填有時間預算
       （手動觸發 update-prices.yml 的 `backfill_minutes`），每個「市場×年」做完就存進度。只給摘要與回測用，手機不下載。
     - 產地價、零售抓不到 → 保留舊檔、不寫空檔、黃燈警告，不擋行情更新。

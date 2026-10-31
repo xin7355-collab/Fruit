@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  actions: write   # 行情排程補位要用 workflow_dispatch 觸發行情工作流（見 scripts/kick_prices.sh）
 
 concurrency:
   group: merchant-update-data
@@ -69,3 +70,10 @@ jobs:
             done
             [ "$ok" = 1 ] || { echo "::error::push 連續失敗"; exit 1; }
           fi
+
+      # GitHub 排程常漏跑：早上行情工作流太久沒跑，就由這裡補觸發（失敗只警告、不影響天氣更新）
+      - name: 行情排程補位
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ../scripts/kick_prices.sh merchant-update-prices.yml
