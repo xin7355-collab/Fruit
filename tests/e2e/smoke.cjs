@@ -255,7 +255,8 @@ async function checkTyphoonMap(ctx, url, name) {
   await p.addInitScript(([pre, c]) => { try { localStorage.setItem(pre + "region", c); } catch (e) {} }, [pre, county + (county === "台中" ? "市" : "縣")]);
   await p.goto(url, { waitUntil: "networkidle" });
   if (await p.locator("#clModal.on").count()) await p.click("#closeCl");
-  await p.evaluate(() => openTyphoon());
+  // 精準進貨：颱風改在「天氣 → 颱風動態」子分頁（沒有彈窗了）；精準務農：田園巡查的颱風詳情彈窗
+  await p.evaluate((n) => (n === "merchant" ? goTyphoon() : openTyphoon()), name);
   await p.waitForSelector("#tyMap .leaflet-tooltip", { timeout: 8000 }).catch(() => {});
   await p.waitForTimeout(400);
   const st = await p.evaluate(() => {
@@ -265,7 +266,9 @@ async function checkTyphoonMap(ctx, url, name) {
       const a = tips[i].r, b = tips[j].r; if (a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]) overlap++; }
     return { paths: document.querySelectorAll("#tyMap path").length, tips: tips.map((x) => x.t), overlap,
       status: (document.querySelector(".tyname") || {}).textContent || "", info: (document.querySelector(".tyinfo") || {}).textContent || "",
-      legend: (document.querySelector(".tylegend") || {}).textContent || "" };
+      legend: (document.querySelector(".tylegend") || {}).textContent || "",
+      iframes: document.querySelectorAll("iframe").length,
+      links: [...document.querySelectorAll(".tybtn")].filter((a) => a.offsetParent).map((a) => a.href) };
   });
   check(st.paths >= 10, `${name} 颱風地圖畫出路徑、暴風圈、機率範圍（${st.paths} 個圖形）`);
   check(st.tips.includes(county) && st.tips.some((t) => t.includes("現在")), `${name} 颱風地圖標出你的位置（${county}）與颱風目前位置`);
@@ -274,10 +277,66 @@ async function checkTyphoonMap(ctx, url, name) {
   check(/14 級/.test(st.info) && /940 hPa/.test(st.info), `${name} 地圖下方有颱風強度（${st.info}）`);
   check(/預報路徑/.test(st.legend) && /70% 機率範圍/.test(st.legend), `${name} 地圖圖例完整`);
   check(await noHScroll(p), `${name} 颱風詳情沒有橫向捲動`);
+  check(st.iframes === 0, `${name} 颱風詳情沒有 windy 內嵌即時影像（使用者要求拿掉）`);
+  check(["cwa.gov.tw", "ncdr.nat.gov.tw", "windy.com"].every((h) => st.links.some((u) => u.includes(h))),
+    `${name} 保留外部連結：氣象署、NCDR、windy 全螢幕（${st.links.length} 個）`);
   await p.screenshot({ path: path.join(OUT, `${name}-typhoon-map.png`) });
-  await p.evaluate(() => closeTyphoon());
-  check(!(await p.locator("#tyMap").count()), `${name} 關閉颱風詳情會釋放地圖`);
+  if (name === "merchant") await p.evaluate(() => switchTab("market")); else await p.evaluate(() => closeTyphoon());
+  check(!(await p.locator("#tyMap .leaflet-pane").count()), `${name} 離開颱風詳情會釋放地圖`);
   check(errs.length === 0, `${name} 颱風詳情沒有 JS 錯誤${errs.length ? "：" + errs.slice(0, 2).join(" | ") : ""}`);
+  await p.close();
+}
+
+async function checkWeatherTabs(ctx, url) {
+  // 2026-10-31 使用者要求：天氣分頁分「近期天氣／颱風動態」，有颱風時旁邊亮紅點；24 小時改左右滑動
+  const tz = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 16).replace("T", " ");   // 台灣時間：讓預報不被當成過期
+  const open = async (typhoon) => {
+    const p = await ctx.newPage(); const errs = [];
+    p.on("pageerror", (e) => errs.push(e.message));
+    await p.route("**/typhoon_status.json", async (r) => {
+      if (typhoon) return r.fulfill({ path: path.join(__dirname, "fixtures", "typhoon_status_infa.json"), contentType: "application/json" });
+      return r.fulfill({ json: { updated: tz, active: false, tracking: false, track: null } });
+    });
+    await p.route("**/weather_forecast.json", async (r) => {
+      const res = await r.fetch(); let j = {}; try { j = await res.json(); } catch (e) {}
+      j.updated = tz; return r.fulfill({ response: res, json: j });
+    });
+    await p.route(/tile\.openstreetmap\.org|windy\.com/, (r) => r.abort());
+    await p.goto(url, { waitUntil: "networkidle" });
+    if (await p.locator("#clModal.on").count()) await p.click("#closeCl");
+    return { p, errs };
+  };
+  let { p, errs } = await open(true);
+  check(await p.locator('.tab[data-t="weather"].dot').count() === 1, "merchant 有颱風時主分頁「天氣」亮紅點");
+  await p.click('.tab[data-t="weather"]'); await p.waitForTimeout(400);
+  const tabs = await p.evaluate(() => [...document.querySelectorAll(".wxtabs button")].map((b) => b.textContent.trim()));
+  check(tabs.join("|") === "近期天氣|颱風動態", `merchant 天氣分頁有子分頁（${tabs.join("、")}）`);
+  check(await p.locator(".wxtabs .rdot").count() === 1, "merchant「颱風動態」旁亮紅點");
+  const strip = await p.evaluate(() => { const s = document.querySelector(".wxs"); if (!s) return null;
+    return { cards: s.querySelectorAll(".wxc").length, sw: s.scrollWidth, cw: s.clientWidth }; });
+  check(!!strip && strip.cards >= 2 && strip.sw > strip.cw + 20, `merchant 未來 24 小時是左右滑動的卡片（${strip ? strip.cards + " 張、內容寬 " + strip.sw + " > " + strip.cw : "沒有預報資料"}）`);
+  if (strip) { await p.evaluate(() => { document.querySelector(".wxs").scrollLeft = 9999; }); await p.waitForTimeout(200); }
+  check(await noHScroll(p), "merchant 天氣分頁整頁沒有橫向捲動（只有 24 小時那一列能滑）");
+  await p.screenshot({ path: path.join(OUT, "merchant-weather-now.png") });
+  const warn = p.locator("#wxWarn");
+  if (await warn.count()) { await warn.click(); await p.waitForTimeout(800);
+    check(await p.locator('.wxtabs button.on[data-w="ty"]').count() === 1, "merchant 點颱風橫幅切到「颱風動態」"); }
+  else { await p.click('.wxtabs button[data-w="ty"]'); await p.waitForTimeout(800); }
+  await p.waitForSelector("#tyMap .leaflet-pane", { timeout: 8000 }).catch(() => {});
+  check(await p.locator("#tyMap .leaflet-pane").count() > 0, "merchant「颱風動態」顯示路徑地圖");
+  await p.screenshot({ path: path.join(OUT, "merchant-weather-typhoon.png") });
+  await p.click('.wxtabs button[data-w="now"]'); await p.waitForTimeout(300);
+  check(await p.locator("#tyMap .leaflet-pane").count() === 0, "merchant 切回「近期天氣」釋放地圖");
+  check(errs.length === 0, `merchant 天氣分頁沒有 JS 錯誤${errs.length ? "：" + errs.slice(0, 2).join(" | ") : ""}`);
+  await p.close();
+  ({ p, errs } = await open(false));
+  check(await p.locator('.tab[data-t="weather"].dot').count() === 0, "merchant 沒有颱風時主分頁不亮紅點");
+  await p.click('.tab[data-t="weather"]'); await p.waitForTimeout(300);
+  check(await p.locator(".wxtabs .rdot").count() === 0, "merchant 沒有颱風時「颱風動態」不亮紅點");
+  await p.click('.wxtabs button[data-w="ty"]'); await p.waitForTimeout(300);
+  const t = (await p.textContent("#weatherWrap")) || "";
+  check(/目前沒有颱風/.test(t) && (await p.locator(".tybtn").count()) === 3, "merchant 沒有颱風時「颱風動態」說明目前沒有颱風、仍有外部連結");
+  check(errs.length === 0, `merchant 沒颱風時天氣分頁沒有 JS 錯誤${errs.length ? "：" + errs.slice(0, 2).join(" | ") : ""}`);
   await p.close();
 }
 
@@ -365,6 +424,7 @@ async function visitTabs(page, name, tabs) {
   await checkNoJudgmentAndNames(m.page, "merchant");
   await checkLargeFont(ctx, base + "merchant/", "merchant");
   await checkTyphoonMap(ctx, base + "merchant/", "merchant");
+  await checkWeatherTabs(ctx, base + "merchant/");
   await m.page.goto(base + "merchant/", { waitUntil: "networkidle" });
   await visitTabs(m.page, "merchant", ["compare", "weather", "market"]);
   const lsAll = await m.page.evaluate(() => Object.keys(localStorage));

@@ -227,18 +227,32 @@
   .wx-h{font-size:1.2rem;font-weight:900;margin:0.3rem 0 0.9rem;}
   .wx-foot{font-size:0.72rem;color:var(--muted);margin-top:0.9rem;line-height:1.6;}
   /* 24 小時天氣（逐時段） */
-  .wx24{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:0.9rem 1rem;margin-bottom:0.8rem;}
-  .wx24-h{font-size:1.05rem;font-weight:900;margin:0 0 0.5rem;}
-  .wx24-h small{font-size:0.7rem;font-weight:800;color:var(--bg);background:var(--leaf);padding:0.1rem 0.5rem;border-radius:999px;margin-left:0.5rem;vertical-align:middle;}
-  .wx24-row{border-top:1px solid var(--line);padding:0.6rem 0;display:flex;flex-direction:column;gap:0.25rem;}
-  .wx24-row:first-of-type{border-top:0;padding-top:0.1rem;}
-  .wx24-top{display:flex;align-items:baseline;justify-content:space-between;gap:0.5rem;}
-  .wx24-lab{font-size:1rem;font-weight:800;} .wx24-lab small{color:var(--muted);font-weight:400;font-size:0.8rem;margin-left:0.35rem;}
-  .wx24-tp{font-size:0.95rem;font-weight:800;color:var(--paper);white-space:nowrap;}
-  .wx24-bot{display:flex;align-items:center;justify-content:space-between;gap:0.5rem;}
-  .wx24-wx{font-size:0.9rem;color:var(--paper);} .wx24-wx .e{margin-right:0.3rem;}
-  .wx24-p{font-size:0.9rem;font-weight:800;color:var(--muted);white-space:nowrap;}
-  .wx24-row.wet .wx24-p{color:#7fc0ff;}
+  .wx24{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:0.9rem 0 0.7rem 1rem;margin-bottom:0.8rem;}
+  .wx24-h{font-size:1.05rem;font-weight:900;margin:0 1rem 0.55rem 0;display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;}
+  .wx24-h small{font-size:0.7rem;font-weight:800;color:var(--bg);background:var(--leaf);padding:0.1rem 0.5rem;border-radius:999px;}
+  .wx24-hint{margin-left:auto;font-size:0.72rem;font-weight:700;color:var(--muted);}
+  /* 左右滑動卡片：捲動吸附；最右邊露出半張＝提示還能滑；不顯示捲軸 */
+  .wxs{display:flex;gap:0.5rem;overflow-x:auto;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;
+    padding:0.1rem 1rem 0.3rem 0;scrollbar-width:none;overscroll-behavior-x:contain;}
+  .wxs::-webkit-scrollbar{display:none;}
+  .wxc{flex:0 0 auto;width:min(5.6rem,26vw);scroll-snap-align:start;background:var(--panel2);border:1px solid var(--line);border-radius:14px;
+    padding:0.55rem 0.35rem;display:flex;flex-direction:column;align-items:center;gap:0.2rem;text-align:center;}
+  .wxc.wet{border-color:#7fc0ff;background:rgba(127,192,255,.10);}
+  .wxc-t{font-size:0.8rem;font-weight:800;color:var(--paper);line-height:1.2;}
+  .wxc-t small{display:block;font-size:0.66rem;font-weight:600;color:var(--muted);}
+  .wxc-e{font-size:1.55rem;line-height:1.15;}
+  .wxc-tp{font-size:1.05rem;font-weight:900;}
+  .wxc-p{font-size:0.75rem;font-weight:800;color:var(--muted);white-space:nowrap;}
+  .wxc.wet .wxc-p{color:#7fc0ff;}
+  .wxc-wx{font-size:0.66rem;color:var(--muted);line-height:1.25;}
+  /* 天氣子分頁：近期天氣／颱風動態（有颱風亮紅點） */
+  .wxtabs{display:flex;gap:0.4rem;margin:0 0 0.8rem;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:0.25rem;}
+  .wxtabs button{flex:1;background:transparent;border:0;color:var(--muted);padding:0.5rem 0.4rem;border-radius:999px;
+    font-weight:800;font-size:min(0.95rem,4.2vw);white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:0.3rem;}
+  .wxtabs button.on{background:var(--leaf);color:var(--bg);}
+  .rdot{display:inline-block;width:0.55rem;height:0.55rem;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg);flex:0 0 auto;}
+  .tab.dot{position:relative;}
+  .tab.dot::after{content:"";position:absolute;top:0.3rem;right:0.6rem;width:0.55rem;height:0.55rem;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px var(--bg);}
   /* 品項介紹彈窗 */
   .cropinfo{align-items:center;}
   .cisheet{background:var(--panel);border:1px solid var(--line);border-radius:20px;width:92%;max-width:380px;padding:1.4rem 1.2rem 1.6rem;text-align:center;position:relative;}
@@ -322,12 +336,12 @@
   .alert .k{font-size:0.8rem;color:var(--muted);} .alert .k b{color:var(--paper);}
   .alert.clickable{cursor:pointer;} .alert .tmore{margin-left:auto;color:var(--leaf);font-weight:800;white-space:nowrap;}
   /* 颱風詳情 modal 內容 */
-  #tyBody .tysum{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:0.7rem 0.8rem;margin-bottom:0.4rem;}
-  #tyBody .tyname{font-size:1.05rem;font-weight:800;} #tyBody .tyname b{color:#F6C6B4;}
-  #tyBody .tychips{display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.5rem;}
-  #tyBody .tychip{font-size:0.78rem;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:0.2rem 0.55rem;color:var(--muted);}
-  #tyBody .tychip b{color:var(--paper);}
-  #tyBody .tyh{margin:0.9rem 0 0.4rem;font-size:0.95rem;color:var(--muted);}
+  .tysum{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:0.7rem 0.8rem;margin-bottom:0.4rem;}
+  .tyname{font-size:1.05rem;font-weight:800;} .tyname b{color:#F6C6B4;}
+  .tychips{display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.5rem;}
+  .tychip{font-size:0.78rem;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:0.2rem 0.55rem;color:var(--muted);}
+  .tychip b{color:var(--paper);}
+  .tyh{margin:0.9rem 0 0.4rem;font-size:0.95rem;color:var(--muted);}
   .tyfore{background:linear-gradient(180deg,rgba(111,176,166,.12),transparent);border:1px solid var(--line);border-left:4px solid var(--cool);border-radius:12px;padding:0.7rem 0.85rem;margin-bottom:0.3rem;}
   .tyfore-h{font-weight:900;font-size:0.9rem;color:var(--cool);margin-bottom:0.3rem;}
   .tyfore p{margin:0.25rem 0;font-size:0.92rem;line-height:1.6;} .tyfore .tyadv{color:var(--paper);font-weight:700;}
@@ -335,18 +349,13 @@
   .tyinfo{font-size:0.78rem;color:var(--paper);margin:0.4rem 0 0.1rem;line-height:1.5;}
   .tylegend{display:flex;flex-wrap:wrap;gap:0.3rem 0.8rem;font-size:0.72rem;color:var(--muted);margin-top:0.35rem;}
   .tylg{display:inline-flex;align-items:center;gap:0.3rem;white-space:nowrap;}
+  .tylegend+.tyfore{margin-top:0.8rem;}
   .tylg i{display:inline-block;width:1.4em;height:0;flex:0 0 auto;}
   .leaflet-tooltip.ty-lbl{background:rgba(255,255,255,.92);color:#111827;border:1px solid #9ca3af;border-radius:6px;
     padding:1px 5px;font-size:11px;font-weight:700;box-shadow:none;}
   .leaflet-tooltip.ty-lbl::before{display:none;}
   .leaflet-tooltip.ty-now{color:#b91c1c;} .leaflet-tooltip.ty-me{color:#166534;}
   .tymap.leaflet-container{font-size:12px;} .tymap .leaflet-control-attribution{font-size:10px;line-height:1.4;}   /* Leaflet 預設用 rem，特大字體時出處字會大到蓋住地圖 */
-  .tyov{display:flex;gap:0.35rem;margin-bottom:0.5rem;flex-wrap:wrap;}
-  .tyov button{flex:1;min-width:3.5rem;background:var(--panel2);border:1px solid var(--line);color:var(--muted);
-    padding:0.4rem 0.5rem;border-radius:10px;font-weight:800;font-size:0.85rem;}
-  .tyov button.on{background:var(--leaf);color:var(--bg);border-color:var(--leaf);}
-  .tyframe{position:relative;width:100%;aspect-ratio:4/3;border-radius:12px;overflow:hidden;border:1px solid var(--line);}
-  .tyframe iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
   .tylinks{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.6rem;}
   .tybtn{flex:1;min-width:9rem;text-align:center;background:var(--panel2);border:1px solid var(--leaf-dim);color:var(--leaf);
     text-decoration:none;font-weight:800;padding:0.6rem 0.7rem;border-radius:12px;font-size:0.9rem;}
@@ -559,12 +568,6 @@ details.cmpbt p{margin:.45rem 0 0;line-height:1.55;}
   </div>
 </div>
 
-<div class="modal" id="typhoonModal">
-  <div class="sheet" role="dialog" aria-label="颱風詳情">
-    <h2><span id="tyTitle">颱風詳情</span> <button class="close" id="closeTy" aria-label="關閉">✕</button></h2>
-    <div id="tyBody"></div>
-  </div>
-</div>
 
 <div class="modal" id="modal">
   <div class="sheet" role="dialog" aria-label="設定">
@@ -661,11 +664,17 @@ details.cmpbt p{margin:.45rem 0 0;line-height:1.55;}
 /* 共用演算法放在 core.js（兩支 App 同一份內容、有單元測試）：這裡直接取用，不再各寫一份 */
 const {doyOf,weekOf,median,pctile,sortedEntries,mergeSeries,toLunar}=Core;
 /* ══════ 基礎 ══════ */
-const VERSION="v1.7.7";
+const VERSION="v1.7.8";
 /* 版本更新紀錄（最新在最上面）。未來每次改版就在陣列最前面新增一筆：
    {v:版本, date:"YYYY-MM-DD", title:"一句話重點", items:[本次更新條列…]}。
    會顯示在「設定→關於 App→更新內容」，改版後第一次開啟也會自動彈一次本版。 */
 const CHANGELOG=[
+  {v:"v1.7.8", date:"2026-10-31", title:"天氣分頁：近期天氣／颱風動態 🌦", items:[
+    "【改版】天氣分成「近期天氣」「颱風動態」兩個子分頁；有颱風時「颱風動態」和最上面的「天氣」分頁都會亮紅點。",
+    "【改版】未來 24 小時改成左右滑動的小卡，不用一直往下捲；降雨機率 50% 以上的時段用藍框標出。",
+    "【改版】颱風詳情搬進「颱風動態」（不再跳出視窗），路徑地圖放最上面；點天氣頁的颱風橫幅會直接切過去。",
+    "【調整】拿掉 windy 內嵌即時影像（省流量、不會卡住滑動），保留 NCDR、windy 全螢幕連結，另加中央氣象署颱風消息。",
+  ]},
   {v:"v1.7.7", date:"2026-10-31", title:"資料更新：主要品種改看近 90 天成交量 📚", items:[
     "【改善】多品種卡片的「主要品種」改由後台用近 90 天成交量決定（以前看最近一天，量差不多的品種會每天跳來跳去）。",
     "【改善】比價頁回測說明改用最新數字（中部運費 2 元/公斤幾乎沒省、不填運費運費 5 元反而多花約 3%）。",
@@ -1416,7 +1425,7 @@ function countyCentroid(nm){nm=normCounty(nm);const r=COUNTY_LL.find(c=>c[0]===n
 function regionInvasion(){const cty=activeCounty();const c=countyCentroid(cty);const w=WEATHER||{};
   const prob=c?invasionAt(c.lat,c.lng).prob:(w.invade_prob!=null?w.invade_prob:null);
   return {name:countyShort(cty),prob};}
-/* ══════ 颱風詳情：彩色路徑地圖（tymap.js，兩支 App 共用）＋ windy 雷達 ＋ 官方連結 ══════ */
+/* ══════ 颱風詳情：彩色路徑地圖（tymap.js，兩支 App 共用）＋ 外部連結（windy 內嵌已拿掉） ══════ */
 /* 追蹤／警報文字：後端只會以雲林為準寫「對雲林暫無直接威脅」，前端改用使用者設定的縣市自己組（精準進貨預設台中） */
 function tyStatusText(w){w=w||{};if(w.land_warning&&w.warning)return w.warning;
   if(w.active)return w.warning&&!/暫無/.test(w.warning)?w.warning:"颱風接近中";
@@ -1448,43 +1457,37 @@ function typhoonNarrative(){
     :"威脅尚低，維持追蹤即可，可照常擺攤進貨。";
   return `<div class="tyfore"><div class="tyfore-h">🧑‍✈️ 預報員解讀</div><p>${s}</p><p class="tyadv">👉 ${adv}</p></div>`;
 }
-function windyURL(ov){const lat=23.7,lng=120.5;const prod=ov==="radar"?"&product=radar":"";
-  return `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lng}&detailLat=${lat}&detailLon=${lng}&zoom=6&level=surface&overlay=${ov}${prod}&calendar=now&menu=&type=map&location=coordinates&metricWind=default&metricTemp=default&radarRange=-1`;}
-const WINDY_OV=[["radar","雷達"],["rain","雨量"],["wind","風速"],["gust","陣風"]];
+/* 颱風外部連結：2026-10-31 使用者要求拿掉 windy 內嵌即時影像（每次打開要載好幾 MB、在手機上會吃掉滑動手勢），
+   改成只留連結：NCDR、windy 全螢幕；另加中央氣象署颱風消息（官方來源，本 App 的颱風資料也來自氣象署）。 */
+function tyLinksHTML(){
+  return `<div class="tylinks">
+      <a class="tybtn" href="https://www.cwa.gov.tw/V8/C/P/Typhoon/TY_NEWS.html" target="_blank" rel="noopener">中央氣象署 颱風消息 ↗</a>
+      <a class="tybtn" href="https://watch.ncdr.nat.gov.tw/watch_page_typhoon_v2" target="_blank" rel="noopener">NCDR 災害示警·颱風 ↗</a>
+      <a class="tybtn" href="https://www.windy.com/23.700/120.500?radar,23.700,120.500,6" target="_blank" rel="noopener">windy 全螢幕 ↗</a>
+    </div>`;}
 function typhoonBodyHTML(){
   const w=WEATHER||{};const byR=invasionByRegion();const rk=Object.keys(byR);const ri=regionInvasion();
   const inv=rk.length?rk.map(r=>`<span class="tychip">${r} <b>${Math.round(byR[r]*100)}%</b></span>`).join("")
     :`<span class="tychip">${ri.name} <b>${ri.prob!=null?Math.round(ri.prob*100)+"%":"—"}</b></span>`;
-  const ncdr="https://watch.ncdr.nat.gov.tw/watch_page_typhoon_v2";
-  const windyFull="https://www.windy.com/23.700/120.500?radar,23.700,120.500,6";
   return `<div class="tysum">
       <div class="tyname">🌀 <b>${w.name||"颱風"}</b> · ${tyStatusText(w)}</div>
       <div class="tychips">${inv}<span class="tychip">暴風圈到達 <b>${w.eta_text||"—"}</b></span>${w.min_dist_km!=null?`<span class="tychip">最近 <b>${w.min_dist_km} km</b></span>`:""}${w.rain_24h_mm!=null?`<span class="tychip">24hr雨 <b>${w.rain_24h_mm}mm</b></span>`:""}</div>
     </div>
-    ${typhoonNarrative()}
     <h4 class="tyh">颱風路徑地圖</h4>
     <div id="tyMap" class="tymap" role="img" aria-label="颱風路徑地圖：已發生路徑、預報路徑、暴風圈與你的位置"></div>
     <div class="tyinfo"></div>
     ${TyMap.legendHTML()}
-    <h4 class="tyh">附近即時影像（windy）</h4>
-    <div class="tyov">${WINDY_OV.map(([o,l],i)=>`<button data-ov="${o}" class="${i===0?'on':''}">${l}</button>`).join("")}</div>
-    <div class="tyframe"><iframe id="tyIframe" src="${windyURL('radar')}" loading="lazy" title="windy 即時影像" referrerpolicy="no-referrer"></iframe></div>
-    <div class="tylinks">
-      <a class="tybtn" href="${ncdr}" target="_blank" rel="noopener">NCDR 災害示警·颱風 ↗</a>
-      <a class="tybtn" href="${windyFull}" target="_blank" rel="noopener">windy 全畫面 ↗</a>
-    </div>
-    <p class="tyfoot">路徑：中央氣象署颱風路徑潛勢預報（已發生路徑＝氣象署分析位置）；底圖 © OpenStreetMap 貢獻者。地圖、windy 即時影像與外部連結需連網。</p>`;
+    ${typhoonNarrative()}
+    ${tyLinksHTML()}
+    <p class="tyfoot">路徑：中央氣象署颱風路徑潛勢預報（已發生路徑＝氣象署分析位置）；底圖 © OpenStreetMap 貢獻者。地圖與外部連結需連網。</p>`;
 }
-function openTyphoon(){const w=WEATHER||{};if(!(w.active||w.tracking))return;
-  document.getElementById("tyTitle").textContent=`颱風 ${w.name||""} 詳情`;
-  document.getElementById("tyBody").innerHTML=typhoonBodyHTML();
-  document.querySelectorAll("#tyBody .tyov button").forEach(b=>b.onclick=()=>{
-    document.querySelectorAll("#tyBody .tyov button").forEach(x=>x.classList.toggle("on",x===b));
-    const f=document.getElementById("tyIframe");if(f)f.src=windyURL(b.dataset.ov);});
-  document.getElementById("typhoonModal").classList.add("on");
-  requestAnimationFrame(()=>TyMap.render(document.getElementById("tyMap"),w,tyRef()));}
-function closeTyphoon(){TyMap.destroy();document.getElementById("typhoonModal").classList.remove("on");
-  const b=document.getElementById("tyBody");if(b)b.innerHTML="";}   // 卸載 iframe 省資源
+/* 天氣分頁的子分頁：近期天氣（now）／颱風動態（ty）。2026-10-31 使用者要求：颱風改成子分頁、有颱風時旁邊亮紅點；
+   颱風詳情不再用彈窗（資訊只放一個地方，點警戒橫幅就切到「颱風動態」）。 */
+let WXTAB="now";
+function tyOn(){const w=WEATHER||{};return !!(w.active||w.tracking);}
+/* 主分頁「天氣」也亮紅點：在行情看板就看得到有颱風，不用點進天氣才知道 */
+function updateTyDot(){const b=document.querySelector('.tab[data-t="weather"]');if(b)b.classList.toggle("dot",tyOn());}
+function goTyphoon(){WXTAB="ty";switchTab("weather");window.scrollTo(0,0);}
 /* ══════ 天氣預報建議：擺攤指數／何時下雨 ══════ */
 function fcPeriods(){const C=(FORECAST&&FORECAST.counties)||null;if(!C)return [];
   const p=C[activeCounty()];return (p&&Array.isArray(p.periods))?p.periods:[];}
@@ -1544,7 +1547,7 @@ function typhoonAlertInfo(){
   const w=WEATHER||{active:false};const rain24=+w.rain_24h_mm||0;
   const ri=regionInvasion();
   const invHTML=`<span class="k">${ri.name} 侵襲機率 <b>${ri.prob!=null?Math.round(ri.prob*100)+"%":"—"}</b></span>`;
-  const moreHint=`<span class="k tmore">🛰 點看路徑・雷達 ›</span>`;
+  const moreHint=`<span class="k tmore">🛰 點看颱風路徑 ›</span>`;
   let cls="alert calm",html="",clickable=false,noteworthy=false;
   if(w.active){noteworthy=true;clickable=true;cls="alert flash clickable";html=`<span class="ticon spin">🌀</span>
     <span class="big">颱風 <b>${w.name||"警報中"}</b> · ${tyStatusText(w)}</span>
@@ -1669,8 +1672,6 @@ document.addEventListener("click",e=>{if(!e.target.closest(".searchrow")){const 
 document.getElementById("gear").addEventListener("click",openSettings);
 document.getElementById("closeSet").addEventListener("click",closeSettings);
 document.getElementById("modal").addEventListener("click",e=>{if(e.target.id==="modal")closeSettings();});
-document.getElementById("closeTy").addEventListener("click",closeTyphoon);
-document.getElementById("typhoonModal").addEventListener("click",e=>{if(e.target.id==="typhoonModal")closeTyphoon();});
 document.getElementById("ciClose").addEventListener("click",closeCropInfo);
 document.getElementById("cropInfo").addEventListener("click",e=>{if(e.target.id==="cropInfo")closeCropInfo();});
 /* 關於 App：意見回饋 / 常見問題 / 分享 */
@@ -1756,7 +1757,7 @@ function switchTab(m){
     if(CUR){const sel=document.getElementById("cmpCrop");if([...sel.options].some(o=>o.value===CUR))sel.value=CUR;}
     populateCmpVar();renderCompare();
   }
-  if(m==="weather")renderWeather();
+  if(m==="weather")renderWeather();else TyMap.destroy();
 }
 /* ══════ 天氣分頁：颱風警戒＋擺攤指數＋逐時段天氣，都集中在這 ══════ */
 function fcHour(s){const m=String(s).match(/ (\d{2}):/);return m?m[1]:"";}
@@ -1769,36 +1770,49 @@ function fcLabel(p){
   const part=sh<5?"晨":sh<12?"日白天":sh<18?"日午後":"晚";
   return day?day+part:(p.label||"");
 }
+/* 未來 24 小時：左右滑動的小卡（2026-10-31 使用者要求，原本 8 段直列要捲很長）。
+   卡寬固定、捲動吸附，最右邊會露出半張提示還能滑；降雨機率 ≥50% 的時段用藍框標出來。 */
+function wxCardHTML(lab,sub,p,tempText){const wet=p.pop!=null&&p.pop>=50;
+  return `<div class="wxc${wet?' wet':''}"><span class="wxc-t">${lab}${sub?`<small>${sub}</small>`:""}</span>
+    <span class="wxc-e">${wxEmoji(p.wx)}</span><span class="wxc-tp">${tempText||"–"}</span>
+    <span class="wxc-p">${p.pop!=null?"☔ "+p.pop+"%":"–"}</span><span class="wxc-wx">${p.wx||""}</span></div>`;}
 function wx24HTML(){
-  const hr=fcHourly();
-  if(hr.length){   // 有真逐 3 小時（F-D0047-093）：未來約 24 小時＝8 段
-    const slots=hr.slice(0,8);
-    return `<div class="wx24"><h3 class="wx24-h">🕐 未來 24 小時天氣<small>逐 3 小時</small></h3>`+
-      slots.map(p=>{const wet=p.pop!=null&&p.pop>=50;
-        return `<div class="wx24-row${wet?' wet':''}">
-          <div class="wx24-top"><span class="wx24-lab">${hrLabel(p.t)}</span><span class="wx24-tp">${p.temp!=null?p.temp+"°":""}</span></div>
-          <div class="wx24-bot"><span class="wx24-wx"><span class="e">${wxEmoji(p.wx)}</span>${p.wx||""}</span><span class="wx24-p">${p.pop!=null?"☔ "+p.pop+"%":"–"}</span></div>
-        </div>`;}).join("")+`</div>`;
+  const hr=fcHourly();let head,cards;
+  if(hr.length){   // 有真逐 3 小時：未來約 24 小時＝8 段
+    head=`🕐 未來 24 小時天氣<small>逐 3 小時</small>`;
+    cards=hr.slice(0,8).map(p=>wxCardHTML(hrLabel(p.t),"",p,p.temp!=null?p.temp+"°":""));
+  }else{
+    const ps=fcPeriods();if(!ps.length)return "";   // 無逐時資料→退回 12 小時分段
+    head=`🕐 未來天氣<small>逐 12 小時</small>`;
+    cards=ps.map(p=>wxCardHTML(fcLabel(p),`${fcHour(p.start)}–${fcHour(p.end)}時`,p,fcTempText(p)));
   }
-  const ps=fcPeriods();if(!ps.length)return "";   // 無逐時資料→退回 12 小時分段
-  return `<div class="wx24"><h3 class="wx24-h">🕐 未來天氣</h3>`+
-    ps.map(p=>{const wet=p.pop!=null&&p.pop>=50;const t=`${fcHour(p.start)}–${fcHour(p.end)}時`;
-      return `<div class="wx24-row${wet?' wet':''}">
-        <div class="wx24-top"><span class="wx24-lab">${fcLabel(p)}<small>${t}</small></span><span class="wx24-tp">${fcTempText(p)||""}</span></div>
-        <div class="wx24-bot"><span class="wx24-wx"><span class="e">${wxEmoji(p.wx)}</span>${p.wx||""}</span><span class="wx24-p">${p.pop!=null?"☔ "+p.pop+"%":"–"}</span></div>
-      </div>`;}).join("")+`</div>`;
+  return `<div class="wx24"><h3 class="wx24-h">${head}<span class="wx24-hint">左右滑動 ›</span></h3>
+    <div class="wxs" tabindex="0" aria-label="未來天氣，左右滑動看更多">${cards.join("")}</div></div>`;
 }
 function renderWeather(){
   const wrap=document.getElementById("weatherWrap");if(!wrap)return;
-  const cty=activeCounty();const advice=weatherAdviceHTML();const wx24=wx24HTML();
+  TyMap.destroy();
+  const cty=activeCounty();const on=tyOn();
+  const tabs=`<div class="wxtabs" role="tablist">
+    <button role="tab" data-w="now" class="${WXTAB==="now"?"on":""}" aria-selected="${WXTAB==="now"}">近期天氣</button>
+    <button role="tab" data-w="ty" class="${WXTAB==="ty"?"on":""}" aria-selected="${WXTAB==="ty"}">颱風動態${on?'<span class="rdot" aria-label="有颱風"></span>':""}</button></div>`;
   let body;
-  if(advice){ body=advice+wx24; }   // 擺攤指數卡已含警戒橫幅；下接逐時天氣
-  else { const a=typhoonAlertInfo();  // 無預報資料時的退路：仍顯示警戒卡
-    body=`<div class="${a.cls}" id="wxAlert">${a.html}</div><div class="empty">目前無天氣預報資料，稍後排程更新後即顯示。</div>`; }
-  wrap.innerHTML=`<h2 class="wx-h">🌦 ${cty} 天氣</h2>`+body
+  if(WXTAB==="ty"){
+    body=on?typhoonBodyHTML()
+      :`<div class="empty">🌿 目前沒有颱風或熱帶性低氣壓需要注意。有颱風時這裡會顯示路徑地圖，「颱風動態」旁也會亮紅點。</div>${tyLinksHTML()}`;
+  }else{
+    const advice=weatherAdviceHTML();const wx24=wx24HTML();
+    if(advice)body=advice+wx24;   // 擺攤指數卡已含警戒橫幅；下接 24 小時
+    else{const a=typhoonAlertInfo();
+      body=`<div class="${a.cls}" id="wxAlert">${a.html}</div><div class="empty">目前無天氣預報資料，稍後排程更新後即顯示。</div>`;}
+  }
+  wrap.innerHTML=`<h2 class="wx-h">🌦 ${cty} 天氣</h2>`+tabs+body
     +`<p class="wx-foot">天氣／颱風資料採中央氣象署開放資料。可在右上 ⚙️ 更換「天氣預報地區」。</p>`;
-  const wn=document.getElementById("wxWarn");if(wn)wn.onclick=openTyphoon;   // 點警戒橫幅→颱風詳情
-  const al=document.getElementById("wxAlert");if(al&&typhoonAlertInfo().clickable)al.onclick=openTyphoon;
+  wrap.querySelectorAll(".wxtabs button").forEach(b=>b.onclick=()=>{WXTAB=b.dataset.w;renderWeather();});
+  const wn=document.getElementById("wxWarn");if(wn)wn.onclick=goTyphoon;   // 點警戒橫幅→切到「颱風動態」
+  const al=document.getElementById("wxAlert");if(al&&typhoonAlertInfo().clickable)al.onclick=goTyphoon;
+  if(WXTAB==="ty"&&on)requestAnimationFrame(()=>TyMap.render(document.getElementById("tyMap"),WEATHER,tyRef()));
+  updateTyDot();
 }
 let CMPCAT="蔬菜";
 function renderCmpCat(){const bar=document.getElementById("cmpCat");if(!bar)return;
@@ -1953,6 +1967,7 @@ window.addEventListener("orientationchange",()=>setTimeout(syncTopbar,200));
   renderBoard();   // 預設進看板清單；點一項才進詳細頁（K線+逐日明細）
   WEATHER=await loadWeather();FORECAST=await loadForecast();loadRetail();
   applyRole();   // 顯示/隱藏分頁
+  updateTyDot(); // 有颱風：主分頁「天氣」亮紅點
   syncTopbar();  // 頂列高度 → 看板列黏在其下方
   maybeShowWhatsNew();   // 改版後第一次開啟：自動跳「更新內容」一次
 })();

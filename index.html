@@ -317,18 +317,13 @@
   .tyinfo{font-size:0.78rem;color:var(--paper);margin:0.4rem 0 0.1rem;line-height:1.5;}
   .tylegend{display:flex;flex-wrap:wrap;gap:0.3rem 0.8rem;font-size:0.72rem;color:var(--muted);margin-top:0.35rem;}
   .tylg{display:inline-flex;align-items:center;gap:0.3rem;white-space:nowrap;}
+  .tylegend+.tyfore{margin-top:0.8rem;}
   .tylg i{display:inline-block;width:1.4em;height:0;flex:0 0 auto;}
   .leaflet-tooltip.ty-lbl{background:rgba(255,255,255,.92);color:#111827;border:1px solid #9ca3af;border-radius:6px;
     padding:1px 5px;font-size:11px;font-weight:700;box-shadow:none;}
   .leaflet-tooltip.ty-lbl::before{display:none;}
   .leaflet-tooltip.ty-now{color:#b91c1c;} .leaflet-tooltip.ty-me{color:#166534;}
   .tymap.leaflet-container{font-size:12px;} .tymap .leaflet-control-attribution{font-size:10px;line-height:1.4;}   /* Leaflet 預設用 rem，特大字體時出處字會大到蓋住地圖 */
-  .tyov{display:flex;gap:0.35rem;margin-bottom:0.5rem;flex-wrap:wrap;}
-  .tyov button{flex:1;min-width:3.5rem;background:var(--panel2);border:1px solid var(--line);color:var(--muted);
-    padding:0.4rem 0.5rem;border-radius:10px;font-weight:800;font-size:0.85rem;}
-  .tyov button.on{background:var(--leaf);color:var(--bg);border-color:var(--leaf);}
-  .tyframe{position:relative;width:100%;aspect-ratio:4/3;border-radius:12px;overflow:hidden;border:1px solid var(--line);}
-  .tyframe iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
   .tylinks{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.6rem;}
   .tybtn{flex:1;min-width:9rem;text-align:center;background:var(--panel2);border:1px solid var(--leaf-dim);color:var(--leaf);
     text-decoration:none;font-weight:800;padding:0.6rem 0.7rem;border-radius:12px;font-size:0.9rem;}
@@ -811,11 +806,15 @@
 /* 共用演算法放在 core.js（兩支 App 同一份內容、有單元測試）：這裡直接取用，不再各寫一份 */
 const {doyOf,weekOf,median,pctile,sortedEntries,mergeSeries,toLunar}=Core;
 /* ══════ 基礎 ══════ */
-const VERSION="v1.1.3";
+const VERSION="v1.1.4";
 /* 版本更新紀錄（最新在最上面）。未來每次改版就在陣列最前面新增一筆：
    {v:版本, date:"YYYY-MM-DD", title:"一句話重點", items:[本次更新條列…]}。
    會顯示在「設定→關於 App→更新內容」。 */
 const CHANGELOG=[
+  {v:"v1.1.4", date:"2026-10-31", title:"颱風詳情精簡 🌀", items:[
+    "【調整】颱風詳情拿掉 windy 內嵌即時影像（省流量、不會卡住滑動），保留 NCDR、windy 全螢幕連結，另加中央氣象署颱風消息。",
+    "【改善】颱風路徑地圖移到最上面，預報員解讀放在地圖下方。",
+  ]},
   {v:"v1.1.3", date:"2026-10-31", title:"5 年歷史上線：比往年同期更可靠 📚", items:[
     "【改善】後台補齊 5 年歷史行情，詳細頁「比往年同期」改用最多 4 年的同期資料比（以前只有 1 年可比，遇到去年颱風就失真）。",
     "【改善】採收預判的準確度說明改用近 4 年回測：誤差中位數約 21%，45～60 天比「直接用今天的價」準。",
@@ -1700,7 +1699,7 @@ function computeField(f){
   return {f,decision,risk,deadline,dilemma,oppo,lines,maturity,matPct,harvestISO,daysToHarvest,phiShort,active,inv,region};
 }
 let hTimers=[];
-/* ══════ 颱風詳情：彩色路徑地圖（tymap.js，兩支 App 共用）＋ windy 雷達 ＋ 官方連結 ══════ */
+/* ══════ 颱風詳情：彩色路徑地圖（tymap.js，兩支 App 共用）＋ 外部連結（windy 內嵌已拿掉） ══════ */
 /* 追蹤／警報文字：後端只會以雲林為準寫「對雲林暫無直接威脅」，前端改用使用者設定的縣市自己組（精準進貨預設台中） */
 function tyStatusText(w){w=w||{};if(w.land_warning&&w.warning)return w.warning;
   if(w.active)return w.warning&&!/暫無/.test(w.warning)?w.warning:"颱風接近中";
@@ -1732,43 +1731,37 @@ function typhoonNarrative(){
     :"威脅尚低，維持追蹤即可，暫可照常管理。";
   return `<div class="tyfore"><div class="tyfore-h">🧑‍✈️ 預報員解讀</div><p>${s}</p><p class="tyadv">👉 ${adv}</p></div>`;
 }
-function windyURL(ov){const lat=23.7,lng=120.5;const prod=ov==="radar"?"&product=radar":"";
-  return `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lng}&detailLat=${lat}&detailLon=${lng}&zoom=6&level=surface&overlay=${ov}${prod}&calendar=now&menu=&type=map&location=coordinates&metricWind=default&metricTemp=default&radarRange=-1`;}
-const WINDY_OV=[["radar","雷達"],["rain","雨量"],["wind","風速"],["gust","陣風"]];
+/* 颱風外部連結：2026-10-31 使用者要求拿掉 windy 內嵌即時影像（每次打開要載好幾 MB、在手機上會吃掉滑動手勢），
+   改成只留連結：NCDR、windy 全螢幕；另加中央氣象署颱風消息（官方來源，本 App 的颱風資料也來自氣象署）。 */
+function tyLinksHTML(){
+  return `<div class="tylinks">
+      <a class="tybtn" href="https://www.cwa.gov.tw/V8/C/P/Typhoon/TY_NEWS.html" target="_blank" rel="noopener">中央氣象署 颱風消息 ↗</a>
+      <a class="tybtn" href="https://watch.ncdr.nat.gov.tw/watch_page_typhoon_v2" target="_blank" rel="noopener">NCDR 災害示警·颱風 ↗</a>
+      <a class="tybtn" href="https://www.windy.com/23.700/120.500?radar,23.700,120.500,6" target="_blank" rel="noopener">windy 全螢幕 ↗</a>
+    </div>`;}
 function typhoonBodyHTML(){
   const w=WEATHER||{};const byR=invasionByRegion();const rk=Object.keys(byR);const ri=regionInvasion();
   const inv=rk.length?rk.map(r=>`<span class="tychip">${r} <b>${Math.round(byR[r]*100)}%</b></span>`).join("")
     :`<span class="tychip">${ri.name} <b>${ri.prob!=null?Math.round(ri.prob*100)+"%":"—"}</b></span>`;
-  const ncdr="https://watch.ncdr.nat.gov.tw/watch_page_typhoon_v2";
-  const windyFull="https://www.windy.com/23.700/120.500?radar,23.700,120.500,6";
   return `<div class="tysum">
       <div class="tyname">🌀 <b>${w.name||"颱風"}</b> · ${tyStatusText(w)}</div>
       <div class="tychips">${inv}<span class="tychip">暴風圈到達 <b>${w.eta_text||"—"}</b></span>${w.min_dist_km!=null?`<span class="tychip">最近 <b>${w.min_dist_km} km</b></span>`:""}${w.rain_24h_mm!=null?`<span class="tychip">24hr雨 <b>${w.rain_24h_mm}mm</b></span>`:""}</div>
     </div>
-    ${typhoonNarrative()}
     <h4 class="tyh">颱風路徑地圖</h4>
     <div id="tyMap" class="tymap" role="img" aria-label="颱風路徑地圖：已發生路徑、預報路徑、暴風圈與你的位置"></div>
     <div class="tyinfo"></div>
     ${TyMap.legendHTML()}
-    <h4 class="tyh">附近即時影像（windy）</h4>
-    <div class="tyov">${WINDY_OV.map(([o,l],i)=>`<button data-ov="${o}" class="${i===0?'on':''}">${l}</button>`).join("")}</div>
-    <div class="tyframe"><iframe id="tyIframe" src="${windyURL('radar')}" loading="lazy" title="windy 即時影像" referrerpolicy="no-referrer"></iframe></div>
-    <div class="tylinks">
-      <a class="tybtn" href="${ncdr}" target="_blank" rel="noopener">NCDR 災害示警·颱風 ↗</a>
-      <a class="tybtn" href="${windyFull}" target="_blank" rel="noopener">windy 全畫面 ↗</a>
-    </div>
-    <p class="tyfoot">路徑：中央氣象署颱風路徑潛勢預報（已發生路徑＝氣象署分析位置）；底圖 © OpenStreetMap 貢獻者。地圖、windy 即時影像與外部連結需連網。</p>`;
+    ${typhoonNarrative()}
+    ${tyLinksHTML()}
+    <p class="tyfoot">路徑：中央氣象署颱風路徑潛勢預報（已發生路徑＝氣象署分析位置）；底圖 © OpenStreetMap 貢獻者。地圖與外部連結需連網。</p>`;
 }
 function openTyphoon(){const w=WEATHER||{};if(!(w.active||w.tracking))return;
   document.getElementById("tyTitle").textContent=`颱風 ${w.name||""} 詳情`;
   document.getElementById("tyBody").innerHTML=typhoonBodyHTML();
-  document.querySelectorAll("#tyBody .tyov button").forEach(b=>b.onclick=()=>{
-    document.querySelectorAll("#tyBody .tyov button").forEach(x=>x.classList.toggle("on",x===b));
-    const f=document.getElementById("tyIframe");if(f)f.src=windyURL(b.dataset.ov);});
   document.getElementById("typhoonModal").classList.add("on");
   requestAnimationFrame(()=>TyMap.render(document.getElementById("tyMap"),w,tyRef()));}
 function closeTyphoon(){TyMap.destroy();document.getElementById("typhoonModal").classList.remove("on");
-  const b=document.getElementById("tyBody");if(b)b.innerHTML="";}   // 卸載 iframe 省資源
+  const b=document.getElementById("tyBody");if(b)b.innerHTML="";}
 /* ══════ 天氣預報建議：農夫「農事時段／何時下雨」 ══════ */
 function fcPeriods(){const C=(FORECAST&&FORECAST.counties)||null;if(!C)return [];
   const p=C[activeCounty()];return (p&&Array.isArray(p.periods))?p.periods:[];}
@@ -1809,7 +1802,7 @@ function typhoonAlertInfo(){
   const byR=invasionByRegion();const rk=Object.keys(byR);const ri=regionInvasion();
   const invHTML=(rk.length?rk.map(r=>`<span class="k">${r} 侵襲機率 <b>${Math.round(byR[r]*100)}%</b></span>`).join("")
     :`<span class="k">${ri.name} 侵襲機率 <b>${ri.prob!=null?Math.round(ri.prob*100)+"%":"—"}</b></span>`);
-  const moreHint=`<span class="k tmore">🛰 點看路徑・雷達 ›</span>`;
+  const moreHint=`<span class="k tmore">🛰 點看颱風路徑 ›</span>`;
   // 颱風已通過／遠離：改顯示「遠離中」、不再閃爍告警，修正「離開後仍卡在接近中」。（task 5）
   const departing=typhoonDeparted(w);
   // 追蹤中的颱風：跑很遠(>600km)或正在遠離就不再追蹤顯示(免一直掛著)；若之後又逼近會由後端重新判定。

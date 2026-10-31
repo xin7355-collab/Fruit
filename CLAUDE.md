@@ -110,6 +110,8 @@
     - **颱風地圖**：`tymap.js`（兩份一致）＋`vendor/leaflet/`（Leaflet 1.9.4，打開颱風詳情才載入）＋OpenStreetMap 底圖；
       後端 `typhoon_status.json` 多了 `past`（近 5 天已發生路徑）、`now`（氣象署觀測位置）、`track[].r70`。
       追蹤文字由前端依使用者縣市組（後端以雲林為準，不能直接顯示）。CWA 金鑰走 `Authorization` 標頭，被拒才改網址參數。
+    - **天氣分頁（精準進貨）**：子分頁「近期天氣／颱風動態」（`WXTAB`；有颱風時子分頁與主分頁「天氣」亮紅點 `updateTyDot`），
+      颱風詳情不再用彈窗（`goTyphoon()` 切過去）；24 小時是左右滑動卡片 `.wxs`。兩支都拿掉 windy 內嵌（使用者要求），只留連結 `tyLinksHTML`。
     - 字級「大／特大」：操作列字級用 `min(rem, vw)` 封頂、卡片改上下排、`html{overflow-x:clip}`（整頁一變寬，彈窗 ✕ 會跑出畫面）。
   - **技能**：`.claude/skills/` 由 skl 的 app-bootstrap 安裝（清單見 `.claude/skills/.skl-vendor.json`）；
     更新：`python3 /tmp/skl/xin-toolkit/skills/app-bootstrap/scripts/bootstrap_app.py update --target .`。

@@ -26,6 +26,8 @@ paths:
 - 2026-10-31 晚：`tymap.js`＋`vendor/leaflet/`（兩支各一份、內容一致）＝颱風彩色地圖；`mainVar`（多品種卡主要品種）、
   `nameHTML`／`Core.commonOf`（俗名）、`tyStatusText`／`tyRef`（颱風文字用使用者縣市）；測試 `tests/test_cwa.py`、
   `tests/e2e/fixtures/typhoon_status_infa.json`（煙花颱風真實資料，e2e 驗地圖）。
+- 2026-10-31 夜：精準進貨天氣分頁子分頁（`WXTAB`／`renderWeather`／`goTyphoon`／`updateTyDot`）、24 小時橫滑卡（`wxCardHTML`）；
+  兩支 `tyLinksHTML`（氣象署／NCDR／windy 全螢幕），windy 內嵌與 `windyURL`／`WINDY_OV` 已刪除；精準進貨已無 `typhoonModal`。
 
 ## 這是什麼
 
