@@ -404,6 +404,93 @@ async function checkMerchantR4(ctx, browser, iphone, url) {
   }
 }
 
+async function pinchMap(p) {
+  // 兩指在地圖中央往外撐開（CDP 真的送觸控事件，跟 iPhone 手勢一樣走瀏覽器的觸控流程）
+  const box = await p.locator("#tyMap").boundingBox();
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  const cdp = await p.context().newCDPSession(p);
+  const pts = (d) => [{ x: cx - d, y: cy, id: 0 }, { x: cx + d, y: cy, id: 1 }];
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pts(20) });
+  let mid = "";
+  for (let d = 30; d <= 140; d += 10) {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pts(d) }); await p.waitForTimeout(16);
+    // 手勢進行中看整頁有沒有被放大：Leaflet 量手指距離會除以頁面縮放比例，整頁一起放大＝地圖量不到手指張開（iPhone 上就是放不大）
+    if (d === 100) mid = await p.evaluate(() => { const w = document.querySelector(".wrap"); return w ? w.style.transform : ""; });
+  }
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await p.waitForTimeout(700);
+  return mid;
+}
+
+async function checkMapPinch(ctx, url, name) {
+  // 2026-11-01 使用者回報：颱風路徑地圖兩指不能放大（精準進貨整頁回彈縮放把手勢吃掉）
+  const p = await ctx.newPage();
+  await p.route("**/typhoon_status.json", (r) => r.fulfill({ path: path.join(__dirname, "fixtures", "typhoon_status_infa.json"), contentType: "application/json" }));
+  await p.route(/tile\.openstreetmap\.org|windy\.com/, (r) => r.abort());
+  await p.goto(url, { waitUntil: "networkidle" });
+  if (await p.locator("#clModal.on").count()) await p.click("#closeCl");
+  if (name === "merchant") await p.evaluate(() => goTyphoon());
+  else await p.evaluate(() => openTyphoon());
+  await p.waitForSelector("#tyMap .leaflet-pane", { timeout: 8000 }).catch(() => {});
+  const z0 = await p.evaluate(() => TyMap.current() && TyMap.current().getZoom());
+  const tf = await pinchMap(p);
+  const z1 = await p.evaluate(() => TyMap.current() && TyMap.current().getZoom());
+  check(z0 != null && z1 > z0, `${name} 颱風地圖兩指撐開會放大地圖（zoom ${z0} → ${z1}）`);
+  check(!tf || tf === "scale(1)", `${name} 在地圖上兩指時整頁不跟著放大（手勢中 ${tf || "無"}）`);
+  await p.close();
+}
+
+async function checkNavBack(ctx, url) {
+  // 2026-11-01 使用者要求：左上角 ‹ 上一頁；返回後回到上次的地方（捲動位置、展開的品種）
+  const p = await ctx.newPage(); const errs = [];
+  p.on("pageerror", (e) => errs.push(e.message));
+  await p.goto(url, { waitUntil: "networkidle" });
+  if (await p.locator("#clModal.on").count()) await p.click("#closeCl");
+  check(!(await p.locator("#navBack").isVisible()), "merchant 一進來沒有上一頁可回 → 不顯示 ‹");
+  // 多品種卡：「N 品種」自己一行、不會被拆成兩行
+  const vh = await p.evaluate(() => [...document.querySelectorAll(".mc-vhint")].map((e) => ({ rows: e.getClientRects().length, inName: !!e.closest(".mc-nm") })));
+  check(vh.length > 0 && vh.every((v) => v.rows === 1 && !v.inName), `merchant「N 品種」在名稱下一行、不斷行（${vh.length} 張）`);
+  // 找最後一張多品種卡：展開、捲到那裡、點價格進 K 線
+  const idx = await p.evaluate(() => { const cs = [...document.querySelectorAll("#mktBoard .mcard, .mcard")].filter((c) => c.querySelector(".mc-vhint")); return cs.length ? [...document.querySelectorAll(".mcard")].indexOf(cs[cs.length - 1]) : -1; });
+  if (idx < 0) { check(false, "merchant 找不到多品種卡，無法驗返回位置"); await p.close(); return; }
+  await p.locator(".mcard").nth(idx).locator(".mc-left").click(); await p.waitForTimeout(300);
+  const nm = await p.evaluate(() => PICK);
+  await p.evaluate(() => { const g = document.querySelector(".vgroup"); g.scrollIntoView({ block: "center" }); });
+  await p.waitForTimeout(200);
+  const y0 = await p.evaluate(() => Math.round(scrollY));
+  await p.locator(".vgroup .mc-right:not(.nolink)").first().click(); await p.waitForTimeout(600);
+  check(await p.locator("#mktDetail").isVisible() && await p.locator("#navBack").isVisible(), "merchant 進 K 線後左上角出現 ‹");
+  await p.click("#navBack"); await p.waitForTimeout(500);
+  const back = await p.evaluate(() => ({ y: Math.round(scrollY), pick: PICK, open: !!document.querySelector(".vgroup"), list: getComputedStyle(document.getElementById("mktList")).display !== "none" }));
+  check(back.list && back.pick === nm && back.open, `merchant 按 ‹ 回看板，剛剛展開的「${nm}」品種還是展開的`);
+  check(Math.abs(back.y - y0) <= 4 && y0 > 100, `merchant 按 ‹ 回到原本捲到的位置（${y0} → ${back.y}）`);
+  // 詳細頁自己的「‹ 返回」也一樣
+  await p.locator(".vgroup .mc-right:not(.nolink)").first().click(); await p.waitForTimeout(500);
+  await p.click("#dtlBack"); await p.waitForTimeout(500);
+  check(Math.abs((await p.evaluate(() => Math.round(scrollY))) - y0) <= 4, "merchant 詳細頁「‹ 返回」也回到原位置");
+  // 換分頁 → 上一頁回原分頁、原位置
+  // 用 el.click()：Playwright 的 click 會先把分頁列捲進畫面，記到的位置就變成頁首，驗不到「回原位置」
+  await p.evaluate(() => document.querySelector('.tab[data-t="weather"]').click()); await p.waitForTimeout(300);
+  await p.click("#navBack"); await p.waitForTimeout(500);
+  const wb = await p.evaluate(() => ({ tab: document.querySelector(".tab.on").dataset.t, y: Math.round(scrollY), nav: NAV.length }));
+  check(wb.tab === "market" && Math.abs(wb.y - y0) <= 4, `merchant 從天氣按 ‹ 回到看板原位置（${JSON.stringify(wb)} vs ${y0}）`);
+  check(!(await p.locator("#navBack").isVisible()), "merchant 退到底後 ‹ 自動藏起來");
+  // 比價點市場 → K 線；返回直接回比價（不停在中間的看板）
+  await p.click('.tab[data-t="compare"]'); await p.waitForTimeout(500);
+  await p.locator(".cmprow").first().click(); await p.waitForTimeout(1200);
+  check(await p.locator("#mktDetail").isVisible(), "merchant 比價點市場進 K 線");
+  await p.click("#navBack"); await p.waitForTimeout(500);
+  check(await p.locator('.tab.on[data-t="compare"]').count() === 1, "merchant 從比價進的 K 線，‹ 直接回比價");
+  // 彈窗開著時，上一頁先關彈窗
+  await p.click("#gear"); await p.waitForTimeout(300);
+  await p.evaluate(() => goBack()); await p.waitForTimeout(200);
+  check(!(await p.locator("#modal.on").count()), "merchant 設定開著時，上一頁先關設定");
+  check(await noHScroll(p), "merchant 加了 ‹ 沒有橫向捲動");
+  check(errs.length === 0, `merchant 上一頁沒有 JS 錯誤${errs.length ? "：" + errs.slice(0, 2).join(" | ") : ""}`);
+  await p.screenshot({ path: path.join(OUT, "merchant-navback.png") });
+  await p.close();
+}
+
 async function checkUpdateBar(ctx, url, name) {
   // 版本更新提醒：version.json 比較新才出現提示；一樣就不出現
   for (const newer of [true, false]) {
@@ -473,6 +560,7 @@ async function visitTabs(page, name, tabs) {
   await checkLargeFont(ctx, base, "farmer");
   await checkTyphoonMap(ctx, base, "farmer");
   await checkUpdateBar(ctx, base, "farmer");
+  await checkMapPinch(ctx, base, "farmer");
   await f.page.goto(base, { waitUntil: "networkidle" });
   await visitTabs(f.page, "farmer", ["forecast", "harvest", "market"]);
   const lsFarmer = await f.page.evaluate(() => Object.keys(localStorage));
@@ -507,6 +595,8 @@ async function visitTabs(page, name, tabs) {
   await checkWeatherTabs(ctx, base + "merchant/");
   await checkMerchantR4(ctx, browser, iphone, base + "merchant/");
   await checkUpdateBar(ctx, base + "merchant/", "merchant");
+  await checkMapPinch(ctx, base + "merchant/", "merchant");
+  await checkNavBack(ctx, base + "merchant/");
   await m.page.goto(base + "merchant/", { waitUntil: "networkidle" });
   await visitTabs(m.page, "merchant", ["compare", "weather", "market"]);
   const lsAll = await m.page.evaluate(() => Object.keys(localStorage));

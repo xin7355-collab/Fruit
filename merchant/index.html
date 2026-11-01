@@ -54,6 +54,9 @@
     padding:calc(env(safe-area-inset-top) + 0.5rem) calc(0.8rem + env(safe-area-inset-right)) 0.55rem calc(0.8rem + env(safe-area-inset-left));
     gap:0.5rem;}
   header.slim .gear{margin-left:auto;}
+  .navback{flex:0 0 auto;width:2.4rem;height:2.4rem;margin-left:-0.3rem;border-radius:50%;border:1px solid var(--line);background:var(--panel2);
+    color:var(--paper);font-size:1.7rem;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;padding:0 0 0.2rem;}
+  .navback[hidden]{display:none;}
   .hright{display:flex;align-items:center;gap:0.5rem;flex:0 0 auto;}
   .badge{padding:0.15rem 0.55rem;border-radius:999px;font-size:0.7rem;font-weight:700;border:1px solid var(--line);white-space:nowrap;}
   .badge.demo{color:var(--y);border-color:#5a4d13;background:#231d07;}
@@ -197,7 +200,8 @@
   .mc-right.nolink{pointer-events:none;}
   .mc-nm{font-size:1.45rem;font-weight:900;letter-spacing:1px;line-height:1.15;}
   .mc-sub{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;}
-  .mc-vhint{font-size:0.66rem;font-weight:700;color:var(--bg);background:var(--cool);border-radius:999px;padding:0.05rem 0.4rem;vertical-align:middle;}
+  .mc-vhint{display:inline-block;white-space:nowrap;font-size:0.66rem;font-weight:700;color:var(--bg);background:var(--cool);border-radius:999px;padding:0.05rem 0.45rem;}
+  .mc-vrow{line-height:1;}   /* 「N 品種」自己一行：放在名稱後面字大時會被拆成「4 品／種」 */
   /* 果級價格帶：大果(上價)／一般(中價)／小果(下價) */
   .gband{display:flex;align-items:center;gap:0.3rem;flex-wrap:wrap;margin-top:0.3rem;}
   .gband .gb{display:flex;align-items:baseline;gap:0.2rem;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:0.06rem 0.42rem;font-size:0.72rem;}
@@ -521,6 +525,7 @@ details.cmpbt p{margin:.45rem 0 0;line-height:1.55;}
 <body>
 <div class="wrap">
   <header class="slim">
+    <button class="navback" id="navBack" type="button" aria-label="上一頁" hidden>‹</button>
     <span id="mode" class="badge demo">示範資料</span>
     <span id="updated" class="upd">—</span>
     <button class="gear" id="gear" aria-label="設定">⚙️</button>
@@ -674,11 +679,17 @@ details.cmpbt p{margin:.45rem 0 0;line-height:1.55;}
 /* 共用演算法放在 core.js（兩支 App 同一份內容、有單元測試）：這裡直接取用，不再各寫一份 */
 const {doyOf,weekOf,median,pctile,sortedEntries,mergeSeries,toLunar}=Core;
 /* ══════ 基礎 ══════ */
-const VERSION="v1.7.9";
+const VERSION="v1.8.0";
 /* 版本更新紀錄（最新在最上面）。未來每次改版就在陣列最前面新增一筆：
    {v:版本, date:"YYYY-MM-DD", title:"一句話重點", items:[本次更新條列…]}。
    會顯示在「設定→關於 App→更新內容」，改版後第一次開啟也會自動彈一次本版。 */
 const CHANGELOG=[
+  {v:"v1.8.0", date:"2026-11-01", title:"上一頁、回到原位置、地圖可放大 ‹", items:[
+    "【新增】左上角「‹」上一頁：從 K 線、天氣、比價都能一步一步退回去；設定等彈窗開著時先關彈窗。",
+    "【改善】返回後回到剛剛看的地方：捲動位置、展開的品種都保留，不會再跳回最上面。從比價點進 K 線，返回直接回比價。",
+    "【修正】颱風路徑地圖可以兩指放大縮小了（之前整頁跟著放大，地圖反而放不大）。",
+    "【調整】多品種卡片的「N 品種」移到「▾ 各品種價格」上一行，字大時不會被拆成兩行。",
+  ]},
   {v:"v1.7.9", date:"2026-10-31", title:"打字找品項、天氣換地區、新版提醒 🆕", items:[
     "【調整】「水果」移到「蔬菜」前面（行情看板、比價、設定「我的品項」都一樣），預設先看水果。",
     "【新增】比價可以直接打字找品項，俗名也行（打「芭樂」會找到番石榴）；下拉選單照樣能用。",
@@ -1030,7 +1041,7 @@ const FEST=Object.fromEntries(FESTIVALS);
 let WEVENTS={};
 const WEV_STYLE={typhoon:{g:"🌀",c:"#B7472A"},rain:{g:"🌧",c:"#3B7DD8"},cold:{g:"❄",c:"#57B0C9"}};
 let QDATA=[],QGEO=null,QANNO=[],TF="D",CAT="水果";  // 水果排第一個，預設也選它（否則亮的是第二顆按鈕，像壞掉）
-let UNIT=S.unit,MKTMODE="list",DETAIL=null,SEARCH="",CURVAR=null,PICK=null;   // 公斤/台斤、列表/詳細、詳細頁作物、搜尋、目前品種、展開品種下拉的作物
+let UNIT=S.unit,MKTMODE="list",DETAIL=null,SEARCH="",CURVAR=null,PICK=null,NAV=[],NAV_MUTE=0;   // NAV＝上一頁紀錄（見 goBack）   // 公斤/台斤、列表/詳細、詳細頁作物、搜尋、目前品種、展開品種下拉的作物
 const TF_LABEL={D:"日",W:"週",M:"月"};
 /* ── 單位：1 台斤 = 0.6 公斤 ── */
 function unitF(){return UNIT==="tai"?0.6:1;}
@@ -1201,13 +1212,13 @@ function renderBoard(){
       :`<span class="mc-info">ⓘ 說明</span>`;
     let leftInner,rightInner,rightAction;
     if(!pv){
-      leftInner=`<div class="mc-nm">${nameHTML(disp)}${hasVar?` <span class="mc-vhint">${vlabels.length} 品種</span>`:""}</div>
+      leftInner=`<div class="mc-nm">${nameHTML(disp)}</div>${hasVar?`<div class="mc-vrow"><span class="mc-vhint">${vlabels.length} 品種</span></div>`:""}
         <div class="mc-sub">${leftHint}</div>`;
       rightInner=`<span class="mc-none">近期<br>無成交</span>`;rightAction=hasVar?(()=>{PICK=(PICK===disp?null:disp);renderBoard();}):null;
     }else{
       const ci=chgInfo(pv);const dcls=ci.dcls,arr=ci.arr;
       const stale=pv.stale>14?`<span class="tag season">非當季·最後成交 ${pv.date.slice(5)}</span>`:"";
-      leftInner=`<div class="mc-nm">${nameHTML(disp)}${hasVar?` <span class="mc-vhint">${vlabels.length} 品種</span>`:""}</div>
+      leftInner=`<div class="mc-nm">${nameHTML(disp)}</div>${hasVar?`<div class="mc-vrow"><span class="mc-vhint">${vlabels.length} 品種</span></div>`:""}
         <div class="mc-sub">${stale}${qrChip(pv)}${leftHint}</div>`;
       rightInner=`${mv?`<span class="mc-mv">主要品種·${mv}</span>`:""}<span class="mc-px"><span class="mc-v mono">${pxU(pv.avg).toFixed(1)}</span><span class="mc-u">${unitU()}</span></span>
         <span class="mc-meta"><span class="mc-chg ${dcls} mono">${ci.lbl?`<small>${ci.lbl}</small>`:""}${arr}${ci.txt}</span></span>`;
@@ -1254,7 +1265,7 @@ function roleNoteHTML(avg){const u=unitU();
   return `<div class="rolenote merchant">🧺 進貨成本約 <b>${pxU(avg*(1+FEE_MERCHANT)).toFixed(1)}</b> ${u}（拍賣均價＋承銷手續費估）· 零售自行加價</div>`;
 }
 /* ── 點作物 → (有品種先下拉選) → 詳細頁（K線走勢 + 逐日明細）；‹返回 回列表 ── */
-function openDetail(disp,variety){MKTMODE="detail";DETAIL=disp;CUR=disp;CURVAR=variety||null;PICK=null;
+function openDetail(disp,variety){navPush();MKTMODE="detail";DETAIL=disp;CUR=disp;CURVAR=variety||null;PICK=null;
   const l=document.getElementById("mktList");if(l)l.style.display="none";
   const d=document.getElementById("mktDetail");if(d)d.style.display="";
   renderDetail(disp,CURVAR);window.scrollTo(0,0);
@@ -1263,11 +1274,11 @@ function openDetail(disp,variety){MKTMODE="detail";DETAIL=disp;CUR=disp;CURVAR=v
 function closeDetail(){MKTMODE="list";DETAIL=null;CURVAR=null;
   const d=document.getElementById("mktDetail");if(d)d.style.display="none";
   const l=document.getElementById("mktList");if(l)l.style.display="";
-  renderBoard();window.scrollTo(0,0);}
+  renderBoard();updateBackBtn();}
 function renderDetail(disp,variety){
   const box=document.getElementById("mktDetail");const pv=priceView(disp,variety);
   if(!pv){box.innerHTML=`<div class="dtl-bar"><button class="backbtn" id="dtlBack">‹ 返回</button></div>
-    <div class="empty">「${disp}${variety?" · "+variety:""}」近期無成交資料。</div>`;document.getElementById("dtlBack").onclick=closeDetail;return;}
+    <div class="empty">「${disp}${variety?" · "+variety:""}」近期無成交資料。</div>`;document.getElementById("dtlBack").onclick=goBack;return;}
   const es=pv.es;const prev=es.length>1?es[es.length-2][1].avg:pv.avg;const chg=pv.avg-prev;const chgP=prev?chg/prev*100:0;
   const cls=chg>0.01?"up":chg<-0.01?"dn":"mid";const arrow=chg>0.01?"▲":chg<-0.01?"▼":"＝";
   const hi=pv.last[1].high,lo=pv.last[1].low,qty=pv.last[1].qty;const u=unitU();
@@ -1301,7 +1312,7 @@ function renderDetail(disp,variety){
   const qa=document.getElementById("qanno");if(qa)qa.innerHTML=annoHTML(QANNO);
   const abox=document.getElementById("annobox"),asum=document.getElementById("annosum");
   if(abox){if(QANNO.length){abox.style.display="";asum.textContent=`📌 為什麼漲跌（${QANNO.length} 件大波動）`;}else abox.style.display="none";}
-  document.getElementById("dtlBack").onclick=closeDetail;
+  document.getElementById("dtlBack").onclick=goBack;
   bindUnitToggle(document.getElementById("dtlUnit"));
   document.querySelectorAll("#tfrow button").forEach(b=>b.onclick=()=>{TF=b.dataset.tf;renderDetail(disp,variety);});
   attachCross(box);
@@ -1506,7 +1517,7 @@ let WXTAB="now";
 function tyOn(){const w=WEATHER||{};return !!(w.active||w.tracking);}
 /* 主分頁「天氣」也亮紅點：在行情看板就看得到有颱風，不用點進天氣才知道 */
 function updateTyDot(){const b=document.querySelector('.tab[data-t="weather"]');if(b)b.classList.toggle("dot",tyOn());}
-function goTyphoon(){WXTAB="ty";switchTab("weather");window.scrollTo(0,0);}
+function goTyphoon(){navPush();WXTAB="ty";switchTab("weather");window.scrollTo(0,0);}
 /* ══════ 天氣預報建議：擺攤指數／何時下雨 ══════ */
 function fcPeriods(){const C=(FORECAST&&FORECAST.counties)||null;if(!C)return [];
   const p=C[activeCounty()];return (p&&Array.isArray(p.periods))?p.periods:[];}
@@ -1843,7 +1854,7 @@ function renderWeather(){
     <div class="wx-msg" id="wxMsg"${WX_MSG?"":" hidden"}>${WX_MSG}</div>`;
   wrap.innerHTML=head+tabs+body
     +`<p class="wx-foot">天氣／颱風資料採中央氣象署開放資料。地區可用上方「📍 現在位置」或「✏️ 修改」更換。</p>`;
-  wrap.querySelectorAll(".wxtabs button").forEach(b=>b.onclick=()=>{WXTAB=b.dataset.w;renderWeather();});
+  wrap.querySelectorAll(".wxtabs button").forEach(b=>b.onclick=()=>{if(WXTAB!==b.dataset.w)navPush();WXTAB=b.dataset.w;renderWeather();});
   document.getElementById("wxEdit").onclick=()=>{WX_PICK=!WX_PICK;WX_MSG="";renderWeather();};
   document.getElementById("wxRegion").onchange=e=>setRegion(e.target.value,"");
   document.getElementById("wxLoc").onclick=locateRegion;
@@ -1881,7 +1892,7 @@ function populateCmpVar(){const sel=document.getElementById("cmpVar");if(!sel)re
   sel.style.display="";
   sel.innerHTML=`<option value="">🍴 全部綜合（各市場品種不同，僅參考）</option>`+vs.map(v=>`<option value="${v}">${v}</option>`).join("");
   sel.value=(same&&(cur===""||vs.includes(cur)))?cur:(mainVariety(crop)||"");}   // 同一作物保留使用者自己選的（含全部綜合）
-document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>switchTab(t.dataset.t)));
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{if(!t.classList.contains("on"))navPush();switchTab(t.dataset.t);}));
 
 const CMP_FRESH_DAYS=4;   // 比價只採計最新成交日前 4 天內的報價（涵蓋週日＋週一休市）
 /* 回測結論（scripts/backtest.py E，2026-10；數字改了要同步改 docs/backtest.md）：讓使用者知道「每天換市場」實際能省多少 */
@@ -1936,10 +1947,11 @@ function renderCompare(){
 /* #2 從比價點某市場 → 切到行情看板、載入該市場、開該作物(可帶品種) K線 */
 async function openCompareRow(mk,crop,variety){
   if(!mk||!crop)return;
-  MARKET=mk;S.market=mk;CUR=crop;
-  switchTab("market");
-  await loadMarket(mk);
-  openDetail(crop,variety||null);
+  navPush();NAV_MUTE++;   // 比價→K線算一步：返回直接回比價（不要先停在中間的看板列表）
+  try{MARKET=mk;S.market=mk;CUR=crop;
+    switchTab("market");
+    await loadMarket(mk);
+    openDetail(crop,variety||null);}finally{NAV_MUTE--;updateBackBtn();}
 }
 document.getElementById("cmpCrop").addEventListener("change",()=>{populateCmpVar();renderCompare();});
 /* 比價打字搜尋（2026-10-31 使用者要求：除了下拉選單也要能打字）：跨蔬菜水果、認得俗名；點一項就切過去比價 */
@@ -1970,14 +1982,53 @@ function applyRole(){
   if(!active||active.style.display==="none")switchTab("market");
 }
 
+/* ══════ 上一頁（2026-11-01 使用者要求：左上角 ‹、返回後回到上次看的地方） ══════
+   往前走（換分頁、點進 K 線、颱風子分頁、比價點市場）之前先記下「在哪個分頁、看板展開哪一項、捲到哪」，
+   返回時照原樣還原再捲回去；不只回到頁首（以前從 K 線返回會跳回最上面、展開的品種也收起來）。
+   彈窗開著時，上一頁先關彈窗。iPhone Safari 左緣滑回、Android 返回鍵走同一個 goBack。 */
+function navSnap(){const t=document.querySelector(".tab.on");
+  return {tab:t?t.dataset.t:"market",mode:MKTMODE,detail:DETAIL,curvar:CURVAR,pick:PICK,cat:CAT,wxtab:WXTAB,y:Math.round(window.scrollY)};}
+function navPush(){if(NAV_MUTE)return;NAV.push(navSnap());if(NAV.length>30)NAV.shift();updateBackBtn();}
+function navRestore(s){NAV_MUTE++;
+  try{CAT=s.cat;WXTAB=s.wxtab;switchTab(s.tab);
+    if(s.tab==="market"){
+      if(s.mode==="detail"&&s.detail)openDetail(s.detail,s.curvar);
+      else{MKTMODE="list";DETAIL=null;CURVAR=null;PICK=s.pick;renderBoard();}}
+  }finally{NAV_MUTE--;}
+  // 等版面畫好再捲（展開的品種卡要先長出來，才捲得到原本的位置）
+  requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo(0,s.y)));
+  updateBackBtn();}
+const MODALS=[["clModal",()=>closeChangelog()],["faqModal",()=>closeFaq()],["cropInfo",()=>closeCropInfo()],["modal",()=>closeSettings()]];
+function goBack(){
+  for(const [id,close] of MODALS){const el=document.getElementById(id);if(el&&el.classList.contains("on")){close();updateBackBtn();return true;}}
+  const s=NAV.pop();if(s){navRestore(s);return true;}
+  if(MKTMODE==="detail"){closeDetail();return true;}   // 例：重新整理後直接在 K 線，沒有紀錄可回
+  updateBackBtn();return false;}
+function updateBackBtn(){const b=document.getElementById("navBack");if(b)b.hidden=!(NAV.length||MKTMODE==="detail");}
+document.getElementById("navBack").addEventListener("click",goBack);
+(function(){
+  // 手機返回鍵／Safari 左緣滑回：佔一格瀏覽紀錄，返回時先在 App 內退一步；沒得退才真的離開
+  try{history.pushState({app:1},"");}catch(e){}
+  window.addEventListener("popstate",()=>{if(goBack()){try{history.pushState({app:1},"");}catch(e){}}});
+  // 加到主畫面（全螢幕）沒有瀏覽器的滑回手勢：自己偵測左緣右滑。一般 Safari 不裝，避免跟系統手勢重複退兩步
+  const standalone=navigator.standalone||(window.matchMedia&&matchMedia("(display-mode: standalone)").matches);
+  if(!standalone)return;
+  let sx=0,sy=0,edge=false;
+  document.addEventListener("touchstart",e=>{if(e.touches.length!==1){edge=false;return;}const t=e.touches[0];
+    edge=t.clientX<=24&&!(t.target&&t.target.closest&&t.target.closest("#qchart,.leaflet-container,.wxs"));sx=t.clientX;sy=t.clientY;},{passive:true});
+  document.addEventListener("touchend",e=>{if(!edge)return;edge=false;const t=e.changedTouches[0];
+    if(t.clientX-sx>65&&Math.abs(t.clientY-sy)<45)goBack();},{passive:true});
+})();
 /* ══════ 兩指縮放（放大檢視，放開回彈原狀；純視覺放大、不改版面） ══════ */
 (function(){
   const zc=document.querySelector(".wrap");if(!zc)return;
   let pinching=false,startDist=0;
   const d2=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
   const mid=t=>({x:(t[0].clientX+t[1].clientX)/2,y:(t[0].clientY+t[1].clientY)/2});
+  // 手指在颱風地圖上：交給 Leaflet 自己縮放地圖（2026-11-01 使用者回報地圖兩指放大沒反應——被這裡整頁回彈縮放吃掉）
+  const onMap=e=>[...e.touches].some(t=>t.target&&t.target.closest&&t.target.closest(".leaflet-container"));
   document.addEventListener("touchstart",e=>{
-    if(e.touches.length===2){pinching=true;startDist=d2(e.touches)||1;
+    if(e.touches.length===2&&!onMap(e)){pinching=true;startDist=d2(e.touches)||1;
       const m=mid(e.touches),r=zc.getBoundingClientRect();
       zc.style.transition="none";zc.style.transformOrigin=(m.x-r.left)+"px "+(m.y-r.top)+"px";}
   },{passive:true});
@@ -1990,7 +2041,7 @@ function applyRole(){
     setTimeout(()=>{zc.style.transition="";zc.style.transformOrigin="";},300);}
   document.addEventListener("touchend",e=>{if(e.touches.length<2)release();},{passive:true});
   document.addEventListener("touchcancel",release,{passive:true});
-  document.addEventListener("gesturestart",e=>e.preventDefault());   // 擋 iOS 原生縮放，改用回彈式
+  document.addEventListener("gesturestart",e=>{if(!(e.target&&e.target.closest&&e.target.closest(".leaflet-container")))e.preventDefault();});   // 擋 iOS 原生縮放，改用回彈式（地圖除外）
 })();
 /* 回到 App（開連結返回/切回前景）時，清掉可能卡住的縮放 transform，避免版面殘留/白畫面 */
 window.addEventListener("pageshow",()=>{const zc=document.querySelector(".wrap");

@@ -30,6 +30,7 @@ paths:
   兩支 `tyLinksHTML`（氣象署／NCDR／windy 全螢幕），windy 內嵌與 `windyURL`／`WINDY_OV` 已刪除；精準進貨已無 `typhoonModal`。
 - 2026-10-31 深夜：兩支 `version.json`＋`checkUpdate`／`showUpdateBar`（新版提示列 `#updBar`）；精準進貨 `CAT_ORDER`、
   `cmpPick`／`cmpSugRender`（比價打字搜尋）、`locateRegion`／`nearestCounty`／`setRegion`（天氣頁換地區）。
+- 2026-11-01：精準進貨 `navPush`／`navRestore`／`goBack`／`updateBackBtn`（左上角 ‹ 上一頁、回原位置）；`TyMap.current()`（測試讀地圖 zoom）。
 
 ## 這是什麼
 

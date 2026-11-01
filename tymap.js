@@ -196,6 +196,6 @@
     });
   }
 
-  root.TyMap = { render: render, destroy: destroy, legendHTML: legendHTML, infoText: infoText, beaufort: beaufort,
+  root.TyMap = { render: render, destroy: destroy, current: function () { return current; }, legendHTML: legendHTML, infoText: infoText, beaufort: beaufort,
     category: category, cone: cone, hull: hull, fmtTime: fmtTime };
 })(typeof window !== "undefined" ? window : this);
