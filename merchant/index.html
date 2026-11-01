@@ -228,11 +228,12 @@
   .vgroup .mcard{margin-bottom:0;}
   .mc-child .mc-nm{font-size:1.2rem;letter-spacing:0.5px;}
   /* 天氣分頁 */
-  .wx-h{font-size:1.2rem;font-weight:900;margin:0;}
-  .wx-hrow{display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin:0.3rem 0 0.7rem;}
-  .wx-hbtns{margin-left:auto;display:flex;gap:0.4rem;}
-  .wx-btn{background:var(--panel2);border:1px solid var(--line);color:var(--paper);border-radius:999px;padding:0.4rem 0.7rem;
-    font-weight:800;font-size:min(0.85rem,3.8vw);white-space:nowrap;}
+  /* 標題和兩顆按鈕固定同一列（使用者要求）：按鈕字縮短、字級封頂；縣市名太長才用 … 截掉 */
+  .wx-h{font-size:min(1.2rem,5.2vw);font-weight:900;margin:0;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .wx-hrow{display:flex;align-items:center;gap:0.4rem;flex-wrap:nowrap;margin:0.3rem 0 0.7rem;}
+  .wx-hbtns{flex:0 0 auto;display:flex;gap:0.35rem;}
+  .wx-btn{background:var(--panel2);border:1px solid var(--line);color:var(--paper);border-radius:999px;padding:0.35rem 0.6rem;
+    font-weight:800;font-size:min(0.85rem,3.6vw);white-space:nowrap;}
   .wx-pick{margin:-0.2rem 0 0.7rem;} .wx-pick select{width:100%;font-size:16px;padding:0.55rem 0.7rem;border-radius:12px;
     background:var(--panel2);border:1px solid var(--line);color:var(--paper);}
   .wx-msg{font-size:0.85rem;color:var(--muted);background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:0.55rem 0.7rem;margin:-0.2rem 0 0.7rem;line-height:1.5;}
@@ -275,10 +276,12 @@
   .cisearch{display:block;margin-top:1rem;text-align:center;background:var(--panel2);border:1px solid var(--leaf-dim);
     color:var(--leaf);border-radius:12px;padding:0.6rem;font-weight:800;text-decoration:none;font-size:0.95rem;}
   .cisearch:active{background:var(--leaf-dim);color:var(--bg);}
+  .vsel{position:relative;display:inline-block;vertical-align:middle;}
+  .vsel select{-webkit-appearance:none;appearance:none;font:inherit;font-size:max(16px,0.9rem);font-weight:800;color:var(--bg);background:var(--cool);
+    border:0;border-radius:999px;padding:0.15rem 1.35rem 0.15rem 0.6rem;max-width:11em;text-overflow:ellipsis;}
+  .vsel::after{content:"▾";position:absolute;right:0.5rem;top:50%;transform:translateY(-52%);color:var(--bg);font-size:0.85rem;pointer-events:none;}
   .quote h3 .vtag{font-size:0.9rem;font-weight:800;color:var(--bg);background:var(--cool);border-radius:999px;padding:0.1rem 0.55rem;}
   .dtl-bar{display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;}
-  .backbtn{background:var(--panel2);border:1px solid var(--line);color:var(--paper);font-weight:800;font-size:0.95rem;
-    padding:0.45rem 0.95rem;border-radius:999px;}
   .dtl-bar .unitseg{margin-left:auto;}
   .dd-title{font-weight:900;font-size:1.05rem;margin:1.1rem 0 0.65rem;padding-left:0.6rem;border-left:4px solid var(--leaf);}
   .dcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:0.7rem 0.85rem;margin-bottom:0.55rem;}
@@ -503,7 +506,11 @@ details.cmpbt p{margin:.45rem 0 0;line-height:1.55;}
      卡片在大字級改上下排（名稱一行、價格一行），不再左右硬擠。 */
   html{overflow-x:clip;}
   :root[data-fs="xl"] .boardtop{position:static;}   /* 特大字級時看板頂端（分類／市場／搜尋）會佔掉大半個螢幕 → 不固定，跟著捲走 */   /* 保險：任何元素超寬都不讓整頁變寬（整頁一變寬，彈窗右上的 ✕ 就跑到畫面外按不到） */
-  .upd{white-space:normal;min-width:0;}
+  .upd{white-space:normal;min-width:0;font-size:min(0.72rem,3.3vw);}
+  /* 頁首多了 ‹ 之後特大字級會擠成 4 行：頁首按鈕與標籤也封頂 */
+  .gear,.navback{width:min(2.4rem,10.5vw);height:min(2.4rem,10.5vw);font-size:min(1.2rem,5.4vw);}
+  .navback{font-size:min(1.7rem,7vw);}
+  header.slim .badge{font-size:min(0.7rem,3.2vw);}
   .tab{font-size:min(0.95rem,4.2vw);white-space:nowrap;padding-left:0.2rem;padding-right:0.2rem;}
   .mktrow{flex-wrap:wrap;row-gap:0.45rem;}
   .unitseg button{font-size:min(0.9rem,4vw);padding-left:min(0.9rem,3.2vw);padding-right:min(0.9rem,3.2vw);}
@@ -679,11 +686,16 @@ details.cmpbt p{margin:.45rem 0 0;line-height:1.55;}
 /* 共用演算法放在 core.js（兩支 App 同一份內容、有單元測試）：這裡直接取用，不再各寫一份 */
 const {doyOf,weekOf,median,pctile,sortedEntries,mergeSeries,toLunar}=Core;
 /* ══════ 基礎 ══════ */
-const VERSION="v1.8.0";
+const VERSION="v1.8.1";
 /* 版本更新紀錄（最新在最上面）。未來每次改版就在陣列最前面新增一筆：
    {v:版本, date:"YYYY-MM-DD", title:"一句話重點", items:[本次更新條列…]}。
    會顯示在「設定→關於 App→更新內容」，改版後第一次開啟也會自動彈一次本版。 */
 const CHANGELOG=[
+  {v:"v1.8.1", date:"2026-11-01", title:"K 線換品種、天氣標題一列", items:[
+    "【新增】K 線頁品項名稱旁的品種（例：番石榴的珍珠芭）變成下拉選單，點一下就能換看同作物的其他品種。",
+    "【調整】拿掉 K 線頁的「‹ 返回」，統一用左上角 ‹。",
+    "【調整】天氣頁「台中市 天氣」和「📍 定位」「✏️ 修改」排在同一列。",
+  ]},
   {v:"v1.8.0", date:"2026-11-01", title:"上一頁、回到原位置、地圖可放大 ‹", items:[
     "【新增】左上角「‹」上一頁：從 K 線、天氣、比價都能一步一步退回去；設定等彈窗開著時先關彈窗。",
     "【改善】返回後回到剛剛看的地方：捲動位置、展開的品種都保留，不會再跳回最上面。從比價點進 K 線，返回直接回比價。",
@@ -1271,21 +1283,31 @@ function openDetail(disp,variety){navPush();MKTMODE="detail";DETAIL=disp;CUR=dis
   renderDetail(disp,CURVAR);window.scrollTo(0,0);
   if(CURVAR&&!VARFULL[MARKET]){const mk=MARKET,v=CURVAR;ensureVariants(mk).then(ok=>{
     if(ok&&MKTMODE==="detail"&&DETAIL===disp&&CURVAR===v&&MARKET===mk)renderDetail(disp,v);});}}
+/* 詳細頁品種下拉（2026-11-01 使用者要求：點「珍珠芭」能直接換番石榴其他品種）。
+   只有沒指定品種時（例如從搜尋進來）才列「全部綜合」，選了品種就不再出現——看板已不用綜合價。 */
+function varSelectHTML(vlabels,variety){
+  const opts=(variety?[]:[`<option value="" selected>全部綜合</option>`])
+    .concat(vlabels.map(l=>`<option value="${l}"${l===variety?" selected":""}>${l}</option>`)).join("");
+  // 下拉預設寬度＝最長的選項，會把「台中 批發」擠到下一行 → 寬度跟著目前選的字數走（中文字約 1em 寬）
+  const w=[...(variety||"全部綜合")].length;
+  return `<span class="vsel"><select id="dtlVar" aria-label="換品種" style="width:calc(${w}em + 2.1rem)">${opts}</select></span>`;}
+function switchDetailVar(disp,v){CURVAR=v;renderDetail(disp,v);
+  if(v&&!VARFULL[MARKET]){const mk=MARKET;ensureVariants(mk).then(ok=>{   // 品種完整歷史延後載入：到了再畫一次
+    if(ok&&MKTMODE==="detail"&&DETAIL===disp&&CURVAR===v&&MARKET===mk)renderDetail(disp,v);});}}
 function closeDetail(){MKTMODE="list";DETAIL=null;CURVAR=null;
   const d=document.getElementById("mktDetail");if(d)d.style.display="none";
   const l=document.getElementById("mktList");if(l)l.style.display="";
   renderBoard();updateBackBtn();}
 function renderDetail(disp,variety){
   const box=document.getElementById("mktDetail");const pv=priceView(disp,variety);
-  if(!pv){box.innerHTML=`<div class="dtl-bar"><button class="backbtn" id="dtlBack">‹ 返回</button></div>
-    <div class="empty">「${disp}${variety?" · "+variety:""}」近期無成交資料。</div>`;document.getElementById("dtlBack").onclick=goBack;return;}
+  if(!pv){box.innerHTML=`<div class="empty">「${disp}${variety?" · "+variety:""}」近期無成交資料。按左上角 ‹ 回上一頁。</div>`;return;}
   const es=pv.es;const prev=es.length>1?es[es.length-2][1].avg:pv.avg;const chg=pv.avg-prev;const chgP=prev?chg/prev*100:0;
   const cls=chg>0.01?"up":chg<-0.01?"dn":"mid";const arrow=chg>0.01?"▲":chg<-0.01?"▼":"＝";
   const hi=pv.last[1].high,lo=pv.last[1].low,qty=pv.last[1].qty;const u=unitU();
   const vlabels=varietyLabels(disp);const varTitle=variety?variety:(vlabels.length>=2?"綜合":"");
-  box.innerHTML=`<div class="dtl-bar"><button class="backbtn" id="dtlBack">‹ 返回</button>${unitToggleHTML("dtlUnit")}</div>
+  box.innerHTML=`<div class="dtl-bar">${unitToggleHTML("dtlUnit")}</div>
     <div class="quote">
-      <h3><span>${nameHTML(disp)}${varTitle?` <small class="vtag">${varTitle}</small>`:""}</span><span class="mktbadge">${MARKET} 批發</span></h3>
+      <h3><span>${nameHTML(disp)}${vlabels.length>=2?` ${varSelectHTML(vlabels,variety)}`:varTitle?` <small class="vtag">${varTitle}</small>`:""}</span><span class="mktbadge">${MARKET} 批發</span></h3>
       <div class="price"><span class="v ${cls} mono">${pxU(pv.avg).toFixed(1)}</span><span class="u">${u}</span>
         <span class="chg ${cls} mono">${arrow} ${chg>=0?"+":""}${pxU(chg).toFixed(1)} (${chgP>=0?"+":""}${chgP.toFixed(1)}%)</span></div>
       ${roleNoteHTML(pv.avg)}${retailHTML(disp,pv)}
@@ -1312,8 +1334,8 @@ function renderDetail(disp,variety){
   const qa=document.getElementById("qanno");if(qa)qa.innerHTML=annoHTML(QANNO);
   const abox=document.getElementById("annobox"),asum=document.getElementById("annosum");
   if(abox){if(QANNO.length){abox.style.display="";asum.textContent=`📌 為什麼漲跌（${QANNO.length} 件大波動）`;}else abox.style.display="none";}
-  document.getElementById("dtlBack").onclick=goBack;
   bindUnitToggle(document.getElementById("dtlUnit"));
+  const vs=document.getElementById("dtlVar");if(vs)vs.onchange=()=>switchDetailVar(disp,vs.value||null);
   document.querySelectorAll("#tfrow button").forEach(b=>b.onclick=()=>{TF=b.dataset.tf;renderDetail(disp,variety);});
   attachCross(box);
   bindOffer(pv);
@@ -1570,7 +1592,7 @@ function weatherAdviceHTML(){
   return `<div class="wadv"><div class="wadv-h">🌦 ${cty} · 擺攤指數 <b class="${cls}">${idx}</b></div>
     ${weatherWarnHTML()}
     <div class="wadv-l">${rainLine}</div><div class="wadv-l">${note}</div>
-    <div class="wadv-f">中央氣象署今明預報 · 詳細見下方逐時段（可在天氣頁上方換地區）</div></div>`;
+    <div class="wadv-f">中央氣象署今明預報 · 詳細見下方逐時段</div></div>`;
 }
 /* 颱風/豪雨警戒卡（商人看板頁用；置於天氣預報之上）。平安時回傳 noteworthy=false 讓看板隱藏不佔版面。 */
 function typhoonAlertInfo(){
@@ -1813,7 +1835,7 @@ function wx24HTML(){
   return `<div class="wx24"><h3 class="wx24-h">${head}<span class="wx24-hint">左右滑動 ›</span></h3>
     <div class="wxs" tabindex="0" aria-label="未來天氣，左右滑動看更多">${cards.join("")}</div></div>`;
 }
-/* 天氣地區：2026-10-31 使用者要求從設定搬到天氣頁標題旁——「📍 現在位置」用手機定位找最近的縣市，「✏️ 修改」手動選。
+/* 天氣地區：2026-10-31 使用者要求從設定搬到天氣頁標題旁——「📍 定位」用手機定位找最近的縣市，「✏️ 修改」手動選。
    座標只在手機上換算成縣市，不存、不傳出去（只存縣市名 jb_region）。 */
 let WX_PICK=false,WX_MSG="";
 function regionList(){const C=(FORECAST&&FORECAST.counties)||{};const l=COUNTY_ORDER.filter(c=>C[c]);return l.length?l:COUNTY_ORDER;}
@@ -1849,11 +1871,11 @@ function renderWeather(){
   }
   const opts=regionList().map(c=>`<option value="${c}"${c===cty?" selected":""}>${c}</option>`).join("");
   const head=`<div class="wx-hrow"><h2 class="wx-h">🌦 ${cty} 天氣</h2><div class="wx-hbtns">
-      <button type="button" id="wxLoc" class="wx-btn">📍 現在位置</button><button type="button" id="wxEdit" class="wx-btn">✏️ 修改</button></div></div>
+      <button type="button" id="wxLoc" class="wx-btn" aria-label="用現在位置">📍 定位</button><button type="button" id="wxEdit" class="wx-btn">✏️ 修改</button></div></div>
     <div class="wx-pick" id="wxPick"${WX_PICK?"":" hidden"}><select id="wxRegion" aria-label="選擇天氣地區">${opts}</select></div>
     <div class="wx-msg" id="wxMsg"${WX_MSG?"":" hidden"}>${WX_MSG}</div>`;
   wrap.innerHTML=head+tabs+body
-    +`<p class="wx-foot">天氣／颱風資料採中央氣象署開放資料。地區可用上方「📍 現在位置」或「✏️ 修改」更換。</p>`;
+    +`<p class="wx-foot">天氣／颱風資料採中央氣象署開放資料。地區可按上方「📍 定位」（用手機位置）或「✏️ 修改」（自己選）更換。</p>`;
   wrap.querySelectorAll(".wxtabs button").forEach(b=>b.onclick=()=>{if(WXTAB!==b.dataset.w)navPush();WXTAB=b.dataset.w;renderWeather();});
   document.getElementById("wxEdit").onclick=()=>{WX_PICK=!WX_PICK;WX_MSG="";renderWeather();};
   document.getElementById("wxRegion").onchange=e=>setRegion(e.target.value,"");

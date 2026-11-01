@@ -376,7 +376,7 @@ async function checkMerchantR4(ctx, browser, iphone, url) {
   await p.keyboard.press("Escape"); await p.goto(url, { waitUntil: "networkidle" });
   // 天氣頁：✏️ 修改
   await p.click('.tab[data-t="weather"]'); await p.waitForTimeout(400);
-  check((await p.locator("#wxLoc").count()) === 1 && (await p.locator("#wxEdit").count()) === 1, "merchant 天氣標題旁有「現在位置」「修改」");
+  check((await p.locator("#wxLoc").count()) === 1 && (await p.locator("#wxEdit").count()) === 1, "merchant 天氣標題旁有「📍 定位」「✏️ 修改」");
   check(!(await p.locator("#wxRegion").isVisible()), "merchant 地區選單平常收起");
   await p.click("#wxEdit"); await p.waitForTimeout(200);
   const opts = await p.evaluate(() => [...document.querySelectorAll("#wxRegion option")].map((o) => o.value));
@@ -387,6 +387,15 @@ async function checkMerchantR4(ctx, browser, iphone, url) {
   const hb = await p.evaluate(() => { const h = document.querySelector(".wx-hrow").getBoundingClientRect(), b = document.querySelector(".wx-hbtns").getBoundingClientRect();
     return b.right <= window.innerWidth + 1 && b.top < h.top + 40; });
   check(hb && await noHScroll(p), "merchant 兩顆按鈕在標題右邊、沒有超出畫面");
+  // 標題和兩顆按鈕同一列（2026-11-01 使用者要求）：字級中、大都要同一列
+  for (const fs of ["m", "l"]) {
+    await p.evaluate((f) => { localStorage.setItem("jb_fs", f); applyFont(); renderWeather(); }, fs); await p.waitForTimeout(200);
+    const row = await p.evaluate(() => { const r = (s) => document.querySelector(s).getBoundingClientRect();
+      const h = r(".wx-h"), a = r("#wxLoc"), b = r("#wxEdit"); const c = (x) => x.top + x.height / 2;
+      return { same: Math.abs(c(h) - c(a)) < 8 && Math.abs(c(a) - c(b)) < 2, right: b.right <= innerWidth + 1, title: document.querySelector(".wx-h").textContent.trim() }; });
+    check(row.same && row.right, `merchant 字級${fs === "m" ? "中" : "大"}：「${row.title}」和定位、修改在同一列`);
+  }
+  await p.evaluate(() => { localStorage.removeItem("jb_fs"); applyFont(); renderWeather(); });
   await p.screenshot({ path: path.join(OUT, "merchant-weather-head.png") });
   check(errs.length === 0, `merchant 本輪新功能沒有 JS 錯誤${errs.length ? "：" + errs.slice(0, 2).join(" | ") : ""}`);
   await p.close();
@@ -464,10 +473,22 @@ async function checkNavBack(ctx, url) {
   const back = await p.evaluate(() => ({ y: Math.round(scrollY), pick: PICK, open: !!document.querySelector(".vgroup"), list: getComputedStyle(document.getElementById("mktList")).display !== "none" }));
   check(back.list && back.pick === nm && back.open, `merchant 按 ‹ 回看板，剛剛展開的「${nm}」品種還是展開的`);
   check(Math.abs(back.y - y0) <= 4 && y0 > 100, `merchant 按 ‹ 回到原本捲到的位置（${y0} → ${back.y}）`);
-  // 詳細頁自己的「‹ 返回」也一樣
+  // 詳細頁：不再有重複的「‹ 返回」；品種是下拉，可換同作物其他品種（2026-11-01 使用者要求）
   await p.locator(".vgroup .mc-right:not(.nolink)").first().click(); await p.waitForTimeout(500);
-  await p.click("#dtlBack"); await p.waitForTimeout(500);
-  check(Math.abs((await p.evaluate(() => Math.round(scrollY))) - y0) <= 4, "merchant 詳細頁「‹ 返回」也回到原位置");
+  check(await p.locator("#dtlBack").count() === 0, "merchant 詳細頁沒有重複的「‹ 返回」");
+  const vo = await p.evaluate(() => [...document.querySelectorAll("#dtlVar option")].map((o) => o.value));
+  const cur = await p.evaluate(() => CURVAR);
+  const other = vo.find((v) => v && v !== cur);
+  check(vo.length >= 2 && vo.includes(cur) && !!other, `merchant 詳細頁品種是下拉（${vo.join("、")}，目前 ${cur}）`);
+  if (other) {
+    await p.selectOption("#dtlVar", other); await p.waitForTimeout(500);
+    const after = await p.evaluate(() => ({ cv: CURVAR, sel: document.getElementById("dtlVar").value, d: getComputedStyle(document.getElementById("mktDetail")).display }));
+    check(after.cv === other && after.sel === other && after.d !== "none", `merchant 下拉換成「${other}」→ K 線改看該品種`);
+    check(await noHScroll(p), "merchant 品種下拉沒有造成橫向捲動");
+    await p.screenshot({ path: path.join(OUT, "merchant-detail-variety.png") });
+  }
+  await p.click("#navBack"); await p.waitForTimeout(500);
+  check(Math.abs((await p.evaluate(() => Math.round(scrollY))) - y0) <= 4, "merchant 換過品種後按 ‹ 也回到原位置");
   // 換分頁 → 上一頁回原分頁、原位置
   // 用 el.click()：Playwright 的 click 會先把分頁列捲進畫面，記到的位置就變成頁首，驗不到「回原位置」
   await p.evaluate(() => document.querySelector('.tab[data-t="weather"]').click()); await p.waitForTimeout(300);
