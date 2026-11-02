@@ -7,6 +7,7 @@ price_core.py —— 行情處理核心（精準務農 scripts/ 與精準進貨 
 - signal()          看板摘要：偏貴/偏便宜（單日價 vs 近 90 筆中位數 ±10%，回測後保留舊法）、
                     比往年同期（補充資訊）、較上週、量少提示。
 - summarize()       每個作物＋品種的看板摘要（前端先用摘要畫看板，不必等品種歷史）。
+- year_stats()      一年百分位、到貨量比（＝前端 core.js yearStats，詳細頁顯示；回測 S1 也用這一份）。
 - write_market()    寫三個檔：NN.json（本月前母作物）、NN_v.json（本月前品種，點品種才載）、NN_recent.json（本月＋摘要）。
 
 「往年同期」做法與門檻 0.88/1.12 參考 mina201199/veggie-price-tw（MIT），本檔程式為自行撰寫；
@@ -23,6 +24,10 @@ OLD_TAG = 0.10                      # 舊法：90 筆中位數 ±10%（退回用
 SEASON_WEEKS = 2                    # 同週前後 2 週
 SEASON_GAP_DAYS = 300               # 只用 300 天以前的資料當「往年」，避免把今年這一季算進基準
 SEASON_MIN = 15                     # 往年同期至少 15 個交易日才判斷，否則退回近 90 筆
+# 往年同期至少要來自幾個不同的往年。2026-11-02 回測（docs/backtest.md A）試過要求 2 年：整體反而變差
+# （偏便宜命中 62.5%→61.9%、差距 16.6%→16.1%）——只有 1 年可比的樣本，用那 1 年仍比退回近 90 筆準
+# （59.5% vs 57.6%）；2023-11 起兩種規則結果相同。所以維持 1 年；回測與 S1 仍用參數 min_years 比較 2 年。
+SEASON_MIN_YEARS = 1
 THIN_QTY = 300                      # 近 3 個交易日平均日量 < 300 公斤 → 標「量少，價格容易大起大落」
 CLOSED_KEEP_DAYS = 120              # 休市日只保留近 120 天
 
@@ -147,11 +152,29 @@ def _vw(entries):
     return sum(v["avg"] for _, v in entries) / len(entries)
 
 
-def season_baseline(entries, as_of):
-    """往年同期中位數：同週前後 2 週、且在 as_of 300 天以前的交易日。樣本不足回 None。"""
-    wk, cut = week_of(as_of), (_d(as_of) - timedelta(days=SEASON_GAP_DAYS)).isoformat()
-    xs = [v["avg"] for d, v in entries if d <= cut and _week_dist(week_of(d), wk) <= SEASON_WEEKS]
-    return (statistics.median(xs), len(xs)) if len(xs) >= SEASON_MIN else (None, len(xs))
+def season_sample(entries, as_of):
+    """往年同期用到的價格（同週前後 2 週、且在 as_of 300 天以前的交易日），以及它們來自幾個不同的往年。
+    「哪一年」用相隔天數 ÷ 365.25 四捨五入（1＝去年同期）：跨年的窗（12 月底～1 月初）是同一季，
+    用日曆年份算會被當成兩年，讓只有一年可比的品項混過 2 年門檻。"""
+    a = _d(as_of)
+    wk, cut = week_of(as_of), (a - timedelta(days=SEASON_GAP_DAYS)).isoformat()
+    xs, years = [], set()
+    for d, v in entries:
+        if d <= cut and _week_dist(week_of(d), wk) <= SEASON_WEEKS:
+            xs.append(v["avg"])
+            years.add(round((a - _d(d)).days / 365.25))
+    return xs, len(years)
+
+
+def _season_ok(xs, n_years, min_years):
+    return len(xs) >= SEASON_MIN and n_years >= min_years
+
+
+def season_baseline(entries, as_of, min_years=SEASON_MIN_YEARS):
+    """往年同期中位數：至少 15 個交易日、且來自至少 min_years 個不同往年才算，否則回 (None, 交易日數)。
+    min_years 只有回測會改（比較「要求 2 個往年」，見 SEASON_MIN_YEARS 的說明）。"""
+    xs, ny = season_sample(entries, as_of)
+    return (statistics.median(xs), len(xs)) if _season_ok(xs, ny, min_years) else (None, len(xs))
 
 
 def recent_price(entries):
@@ -192,6 +215,7 @@ def signal_es(es):
       同日補齊 5 年封存後重測（2022-11～2026-10 樣本外）：往年同期 0.88/1.12 勝過舊法——
       偏便宜後 10 個交易日命中率 62.5% vs 57.4%、偏貴 56.7% vs 54.4%、差距 16.5% vs 10.6%
       → t 改用往年同期，往年同期樣本不足（<15 個交易日）才退回舊法；tb 記用了哪個基準（s 往年同期／r 近 90 筆）。
+      2026-11-02 試過再要求「至少 2 個往年」（避開單一颱風年）：回測整體變差 → 不採用（見 SEASON_MIN_YEARS）。
       看板已依使用者要求不顯示 t（會讓人誤會），目前只有 LINE 行情推播用它判斷要不要通知；r 仍是舊法比值（詳細頁顯示用）。"""
     old_t, old_r = old_signal(es)
     cur, tail = recent_price(es)
@@ -213,14 +237,44 @@ def signal_es(es):
     return out
 
 
-def season_signal(es):
-    """回測用：往年同期判斷法（與 signal_es 的 t 同一套規則；回測直接呼叫比較省時間）。"""
+def season_signal(es, min_years=SEASON_MIN_YEARS, sample=None):
+    """回測用：往年同期判斷法（與 signal_es 的 t 同一套規則；回測直接呼叫比較省時間）。
+    sample＝season_sample() 的結果：回測同一天要比兩種年數門檻時只掃一次資料。"""
     cur, _ = recent_price(es)
-    base, _ = season_baseline(es, es[-1][0])
-    if base is None:
+    xs, ny = sample if sample is not None else season_sample(es, es[-1][0])
+    if not _season_ok(xs, ny, min_years):
         return old_signal(es)[0], "r"
-    r = cur / base
+    r = cur / statistics.median(xs)
     return ("up" if r >= TAG_HI else "dn" if r <= TAG_LO else "mid"), "s"
+
+
+YEAR_MIN_DAYS = 60                  # 一年百分位：近一年至少 60 個交易日才算（太少不硬算）
+SUPPLY_DAYS, SUPPLY_MIN_DAYS = 14, 3  # 到貨量比：近 14 天、至少 3 個交易日
+
+
+def year_stats(es):
+    """一年百分位與到貨量比（與 core.js yearStats 同規則：詳細頁顯示用，回測 S1 也用這一份；tests/test_parity.py 比對兩邊）。
+    es＝已排序、avg>0 的 [(日期, 值)]，以最後一筆（最新交易日）為準：
+      pct＝近 365 天（含當天）交易日中，均價比最新價低的比例；sup＝近 14 天平均每交易日到貨量 ÷ 近 365 天平均。
+    近一年不到 60 個交易日回 None；近 14 天不到 3 個交易日則 sup 為 None。
+    平均用 sum()/len()（不用 statistics.mean 的分數運算），加總順序跟 JS 一樣，兩邊算出逐位元相同的浮點數。
+    （做法參考 mina201199/veggie-price-tw tools/build.py summarize（MIT），程式自行撰寫。）"""
+    if not es:
+        return None
+    last, cur = es[-1][0], es[-1][1]["avg"]
+    y0 = (_d(last) - timedelta(days=365)).isoformat()
+    s0 = (_d(last) - timedelta(days=SUPPLY_DAYS)).isoformat()
+    i = len(es)
+    while i > 0 and es[i - 1][0] > y0:      # 從尾巴往回找：回測每天呼叫一次，只掃一年份、不掃整段 5 年
+        i -= 1
+    yr = es[i:]
+    if len(yr) < YEAR_MIN_DAYS:
+        return None
+    qsum = lambda a: sum((v.get("qty") or 0) for _, v in a)
+    rec = [e for e in yr if e[0] > s0]
+    vy = qsum(yr) / len(yr)
+    return {"last": last, "n": len(yr), "pct": sum(1 for _, v in yr if v["avg"] < cur) / len(yr),
+            "sup": qsum(rec) / len(rec) / vy if len(rec) >= SUPPLY_MIN_DAYS and vy > 0 else None, "n_recent": len(rec)}
 
 
 MAIN_VAR_DAYS = 90                  # 主要品種：看近 90 天的成交量

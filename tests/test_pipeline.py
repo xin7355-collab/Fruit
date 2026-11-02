@@ -381,6 +381,67 @@ def test_signal_falls_back_when_no_history(pc):
     assert pc.season_signal(sorted(series_from(pairs).items())) == ("up", "r")
 
 
+def test_season_years_count_seasons_not_calendar_years(pc):
+    """「來自幾個往年」用相隔天數算：12 月底～1 月初是同一季，不能因為跨了日曆年就算成兩年。"""
+    pairs = [((date(2025, 12, 20) + timedelta(days=i)).isoformat(), 20, 1000) for i in range(22)]   # 2025-12-20～2026-01-10
+    pairs.append(("2026-12-31", 22, 1000))
+    es = sorted(series_from(pairs).items())
+    xs, ny = pc.season_sample(es, "2026-12-31")
+    assert len(xs) >= pc.SEASON_MIN and ny == 1, (len(xs), ny)
+    assert pc.season_baseline(es, "2026-12-31", min_years=1)[0] == 20
+    assert pc.season_baseline(es, "2026-12-31", min_years=2)[0] is None, "只有一季可比 → 要求 2 年時不判斷"
+    assert pc.season_signal(es, min_years=2)[1] == "r", "要求 2 年但只有 1 年 → 退回近 90 筆"
+
+
+def test_season_two_prior_years(pc):
+    pairs = []
+    for y, a in ((2024, 20), (2025, 30)):
+        pairs += [((date(y, 10, 15) + timedelta(days=i)).isoformat(), a, 1000) for i in range(20)]
+    pairs.append(("2026-10-30", 25, 1000))
+    es = sorted(series_from(pairs).items())
+    assert pc.season_sample(es, "2026-10-30")[1] == 2
+    assert pc.season_baseline(es, "2026-10-30", min_years=2) == (25, 40), "兩年各 20 天：中位數 (20+30)/2"
+    assert pc.season_signal(es, min_years=2) == ("mid", "s")
+
+
+def test_season_min_years_default_stays_one(pc):
+    # 2026-11-02 回測（docs/backtest.md A）：要求 2 個往年整體變差 → 線上維持 1 年。要改這個數字請先重跑回測。
+    assert pc.SEASON_MIN_YEARS == 1
+
+
+def year_series(last="2026-10-30", n=100, step=3, price=lambda i: float(i), qty=lambda i: 100):
+    """最新一天往回每 step 天一筆（i＝0 是最新一天）。"""
+    d0 = date.fromisoformat(last)
+    return sorted(((d0 - timedelta(days=i * step)).isoformat(), {"avg": price(i), "qty": qty(i)}) for i in range(n))
+
+
+def test_year_stats_percentile_and_supply(pc):
+    # 近一年 100 個交易日：最新一天 3 元，其他 99 天是 1、2、4、5…100 元 → 比它低的只有 2 天
+    prices = [3.0] + [float(x) for x in range(1, 101) if x != 3]
+    es = year_series(price=lambda i: prices[i], qty=lambda i: 300 if i * 3 < 14 else 100)
+    # 一年多以前的超低價、超大量：不能算進來
+    es = sorted([("2025-09-01", {"avg": 0.5, "qty": 99999}), ("2025-06-01", {"avg": 0.5, "qty": 99999})] + es)
+    y = pc.year_stats(es)
+    assert y["n"] == 100 and y["pct"] == pytest.approx(0.02), y
+    # 近 14 天＝最新一天往回 0、3、6、9、12 天共 5 筆 300 公斤，其餘 95 筆 100 公斤 → 一年平均 110
+    assert y["n_recent"] == 5 and y["sup"] == pytest.approx(300 / 110), y
+    assert y["last"] == "2026-10-30"
+
+
+def test_year_stats_needs_enough_days(pc):
+    assert pc.year_stats([]) is None
+    assert pc.year_stats(year_series(n=59)) is None, "近一年不到 60 個交易日 → 不算"
+    y = pc.year_stats(year_series(n=60))
+    assert y and y["pct"] == pytest.approx(0), "最新一天是一年最低價（i＝0 → 0 元）"
+    assert pc.year_stats(year_series(n=80, step=4))["sup"] is not None    # 近 14 天：0、4、8、12 → 4 筆
+    s = dict(year_series(n=52, step=7))                                   # 近 14 天只有 0、7 天前 → 2 筆
+    s.update(dict(year_series(last="2026-07-01", n=40, step=2)))          # 補到一年 60 筆以上（都在 14 天前）
+    y = pc.year_stats(sorted(s.items()))
+    assert y["n"] >= 60 and y["n_recent"] == 2
+    assert y["sup"] is None and y["pct"] is not None, "近 14 天不到 3 筆：不算到貨量比，百分位照算"
+    assert pc.year_stats(year_series(n=80, qty=lambda i: 0))["sup"] is None, "沒有量的資料：不能除以 0"
+
+
 def test_week_change_and_thin(pc):
     s = pc.signal(series_from([("2026-10-01", 10, 100), ("2026-10-20", 12, 100), ("2026-10-30", 15, 100)]))
     assert s["w"] == 25.0 and s["q"] == 1        # 10/20 落在 7～11 天前；量 100 公斤 < 300 → 量少

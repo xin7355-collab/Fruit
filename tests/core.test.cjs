@@ -82,6 +82,48 @@ test("12 個月價格指數與去年同期平移", () => {
   assert.deepEqual(Object.keys(ly).sort(), ["2025-02-28", "2026-10-30"]);
 });
 
+test("12 個月到貨量：用日曆天平均，季節性作物的淡季看得出幾乎沒貨", () => {
+  // 2 年、每天 100 公斤；7 月只有每年 3 天零星成交（各 10 公斤）
+  const s = {};
+  for (let i = 0; i < 730; i++) {
+    const d = C.addDays("2024-11-01", i);
+    if (d.slice(5, 7) === "07") { if (["01", "02", "03"].includes(d.slice(8))) s[d] = { avg: 50, qty: 10 }; }
+    else s[d] = { avg: 20, qty: 100 };
+  }
+  const mi = C.monthIndex(s);
+  assert.equal(mi[6].days, 62, "7 月在 2 年裡有 62 個日曆天（沒成交的日子也算）");
+  assert.equal(mi[6].vol, 0.01, "7 月 60 公斤÷62 天，約全期平均的 1%");
+  assert.ok(mi[6].vol < 0.3, "低於 3 成 → 詳細頁那一格變灰（MH_LOW_SUPPLY）");
+  assert.equal(mi[6].idx, 2.5, "7 月有 6 天成交，價格指數照算");
+  assert.ok(mi[0].vol > 1 && mi[0].vol < 1.1, `1 月到貨正常、略高於全期平均（${mi[0].vol}）`);
+  // 只有 1～3 月的資料：4～12 月不在資料期間內 → 不知道（null），不是 0
+  const q = {};
+  for (let i = 0; i < 90; i++) q[C.addDays("2026-01-01", i)] = { avg: 10, qty: 100 };
+  const m2 = C.monthIndex(q);
+  assert.equal(m2[3].vol, null); assert.equal(m2[3].days, 0); assert.equal(m2[0].vol, 1);
+  // 沒有量的舊資料：量全部 null，價格指數不受影響
+  const nq = {}; for (let i = 0; i < 400; i++) nq[C.addDays("2025-01-01", i)] = { avg: 10 };
+  assert.ok(C.monthIndex(nq).every((x) => x.vol === null && x.idx === 1));
+  assert.ok(C.monthIndex({}).every((x) => x.vol === null && x.idx === null && x.days === 0));
+});
+
+test("一年百分位與到貨量比：只看近 365 天、資料太少不硬算", () => {
+  // 最新一天 3 元，近一年另外 99 天 1、2、4…100 元 → 比它低的 2 天；近 14 天 5 筆 300 公斤、其餘 100 公斤
+  const prices = [3].concat(Array.from({ length: 100 }, (_, k) => k + 1).filter((x) => x !== 3));
+  const s = { "2025-09-01": { avg: 0.5, qty: 99999 } };   // 一年多以前：不能算進來
+  for (let i = 0; i < 100; i++) s[C.addDays("2026-10-30", -3 * i)] = { avg: prices[i], qty: 3 * i < 14 ? 300 : 100 };
+  const y = C.yearStats(s);
+  assert.equal(y.n, 100); assert.equal(y.pct, 0.02); assert.equal(y.nRecent, 5); assert.equal(y.last, "2026-10-30");
+  assert.ok(Math.abs(y.sup - 300 / 110) < 1e-9, y.sup);
+  const few = {}; for (let i = 0; i < 59; i++) few[C.addDays("2026-10-30", -3 * i)] = { avg: 10, qty: 1 };
+  assert.equal(C.yearStats(few), null, "近一年不到 60 個交易日");
+  assert.equal(C.yearStats({}), null);
+  const gap = {}; for (let i = 0; i < 70; i++) gap[C.addDays("2026-10-15", -2 * i)] = { avg: 10 + i, qty: 5 };
+  gap["2026-10-30"] = { avg: 12, qty: 5 };              // 近 14 天只有 2 筆（10/30、10/17）
+  const g = C.yearStats(gap);
+  assert.equal(g.sup, null); assert.ok(g.pct > 0 && g.pct < 0.1, g.pct);
+});
+
 // ── tymap.js（颱風地圖，兩支 App 共用） ──
 const TY = require(path.join(ROOT, "tymap.js")).TyMap;
 

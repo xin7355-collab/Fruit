@@ -123,10 +123,32 @@
     }
     return {perKg:Math.round(perKg*10)/10,level:level,text:text,ref:{hi:hi,mid:mid,lo:lo}};}
 
-  /* ── 12 個月價格指數：各月中位數 ÷ 全期中位數（>1＝高價月）。資料不足的月份為 null ── */
+  /* ── 12 個月價格指數：各月中位數 ÷ 全期中位數（>1＝高價月）。資料不足的月份為 null ──
+     vol＝到貨量指數：該月「每個日曆天」平均到貨量 ÷ 全期每個日曆天平均。用日曆天不用交易日：
+     季節性作物淡季只剩零星幾天成交，只用交易日平均會把淡季算成「量正常」，看不出那幾個月幾乎沒貨。
+     days＝資料期間（第一筆～最後一筆）內該月的日曆天數；0＝資料沒涵蓋到這個月，vol 為 null（不知道，不是沒貨）。
+     （到貨量用日曆天正規化的做法參考 mina201199/veggie-price-tw 的 build.py／template.html（MIT），程式自行撰寫。） */
   function monthIndex(seriesObj){const es=sortedEntries(seriesObj);const all=median(es.map(e=>e[1].avg));
-    const by=Array.from({length:12},()=>[]);for(const [d,v] of es)by[Number(d.slice(5,7))-1].push(v.avg);
-    return by.map((a,i)=>({m:i+1,n:a.length,idx:(a.length>=3&&all)?Math.round(median(a)/all*100)/100:null}));}
+    const by=Array.from({length:12},()=>[]),q=new Array(12).fill(0),cal=new Array(12).fill(0);
+    for(const [d,v] of es){const m=Number(d.slice(5,7))-1;by[m].push(v.avg);q[m]+=(+v.qty||0);}
+    if(es.length)for(let iso=es[0][0];iso<=es[es.length-1][0];iso=addDays(iso,1))cal[Number(iso.slice(5,7))-1]++;
+    const tq=q.reduce((a,b)=>a+b,0),td=cal.reduce((a,b)=>a+b,0),rate=td?tq/td:0;
+    return by.map((a,i)=>({m:i+1,n:a.length,idx:(a.length>=3&&all)?Math.round(median(a)/all*100)/100:null,
+      vol:(rate>0&&cal[i]>0)?Math.round(q[i]/cal[i]/rate*100)/100:null,days:cal[i]}));}
+
+  /* ── 一年百分位、到貨量比（詳細頁只寫數字；scripts/price_core.py year_stats 同規則，tests/test_parity.py 用真實資料比對）──
+     以最新交易日為準：pct＝近 365 天（含當天）交易日中，均價比最新價低的比例（0＝一年最低，接近 1＝一年最高）；
+     sup＝近 14 天平均每個交易日到貨量 ÷ 近 365 天平均每個交易日到貨量。
+     近一年不到 60 個交易日（例如品種歷史還在下載、新上市品項）回 null；近 14 天不到 3 個交易日則 sup 為 null。
+     （做法參考 mina201199/veggie-price-tw 的 build.py summarize（MIT），程式自行撰寫。） */
+  const YEAR_MIN_DAYS=60,SUPPLY_DAYS=14,SUPPLY_MIN_DAYS=3;
+  function yearStats(seriesObj){const es=sortedEntries(seriesObj);if(!es.length)return null;
+    const last=es[es.length-1][0],cur=es[es.length-1][1].avg,y0=addDays(last,-365),s0=addDays(last,-SUPPLY_DAYS);
+    const yr=es.filter(e=>e[0]>y0);if(yr.length<YEAR_MIN_DAYS)return null;
+    const qsum=a=>a.reduce((t,e)=>t+(+e[1].qty||0),0);
+    const rec=yr.filter(e=>e[0]>s0),vy=qsum(yr)/yr.length;
+    return {last:last,n:yr.length,pct:yr.filter(e=>e[1].avg<cur).length/yr.length,
+      sup:(rec.length>=SUPPLY_MIN_DAYS&&vy>0)?qsum(rec)/rec.length/vy:null,nRecent:rec.length};}
 
   /* ── 去年同期：把一年前的序列平移到今年的日期（2/29 併到 2/28），K 線畫虛線對照 ── */
   function lastYearSeries(seriesObj,fromISO,toISO){const out={};
@@ -137,5 +159,5 @@
   return {doyOf:doyOf,weekOf:weekOf,median:median,pctile:pctile,sortedEntries:sortedEntries,mergeSeries:mergeSeries,
     addDays:addDays,predictPrice:predictPrice,lunarMD:lunarMD,toLunar:toLunar,festivals:festivals,
     ALIASES:ALIASES,aliasesOf:aliasesOf,COMMON:COMMON,commonOf:commonOf,nameHit:nameHit,nameStarts:nameStarts,judgeOffer:judgeOffer,
-    monthIndex:monthIndex,lastYearSeries:lastYearSeries};
+    monthIndex:monthIndex,yearStats:yearStats,lastYearSeries:lastYearSeries};
 });
