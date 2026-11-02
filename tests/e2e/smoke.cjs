@@ -464,7 +464,9 @@ async function checkNavBack(ctx, url) {
   if (idx < 0) { check(false, "merchant 找不到多品種卡，無法驗返回位置"); await p.close(); return; }
   await p.locator(".mcard").nth(idx).locator(".mc-left").click(); await p.waitForTimeout(300);
   const nm = await p.evaluate(() => PICK);
-  await p.evaluate(() => { const g = document.querySelector(".vgroup"); g.scrollIntoView({ block: "center" }); });
+  // 捲到「要點的那張品種卡」置中，不是整組置中：品種多（例：洋香瓜 10 幾種）整組比螢幕高時，第一張卡會在畫面外，
+  // Playwright 點之前會自己把它捲進來 → App 記到的位置跟這裡量的 y0 不同，測試就誤判（2026-11-02 資料重現：1673 vs 1231）
+  await p.evaluate(() => { document.querySelector(".vgroup .mc-right:not(.nolink)").scrollIntoView({ block: "center" }); });
   await p.waitForTimeout(200);
   const y0 = await p.evaluate(() => Math.round(scrollY));
   await p.locator(".vgroup .mc-right:not(.nolink)").first().click(); await p.waitForTimeout(600);
