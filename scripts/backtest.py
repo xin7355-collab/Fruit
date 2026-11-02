@@ -7,6 +7,10 @@ backtest.py —— 離線回測（不連網），用 repo 裡的真實批發行�
   D. 搭配種法「挑預估每天淨利最高的菜」，實際收成時有沒有比「一直種小白菜」「種去年同期最賺的」好？
   E. 精準進貨跨市場比價：每天照 App「含運最便宜」去別的市場進貨，扣掉運費、路上損耗後，真的比在自己市場買便宜嗎？
   F. 零售參考價：「批發價 × 每種菜自己的倍數」估零售，準不準？跟「固定 2 倍」「上個月零售價」比。
+  S1. 量價雙確認進貨（2026-11-02）：價格不高於往年同期（要 2 個往年）、一年百分位 ≤ 75%、到貨量比 ≥ 1.1 才多進，
+      跟每週固定、每天買、B、事後最佳比。
+  S2. 雜訊過濾（2026-11-02）：近 30 天價格變異係數 ≤ 0.3、量 ≥ 該市場門檻才發 A 的訊號，命中率有沒有變高。
+  （A 另比「往年同期要求 2 個往年」：2026-11-02 試過，沒有比較好 → App 不採用。）
 
 有 5 年封存（prices/archive/，排程回填後才有）時自動一起讀：A、B 用得到更長的「往年同期」；
 C、D 仍只給模型看決策日前 2 年（手機上只有 2 年資料，回測不能比 App 實際看到的多）。
@@ -22,6 +26,7 @@ C、D 仍只給模型看決策日前 2 年（手機上只有 2 年資料，回�
 import argparse
 import bisect
 import importlib.util
+import itertools
 import json
 import os
 import re
@@ -60,6 +65,18 @@ MIN_CMP_DAYS = 200               # 鄰近市場至少 200 個交易日有這項�
 # F：零售參考價
 RETAIL_FIXED = 2.0               # 對照組：常聽到的「零售約批發 1.5～2.5 倍」取中間 2 倍
 RETAIL_LAGS = (1, 2, 3, 6)       # 零售資料若晚 1／2／3／6 個月才看得到，「直接用舊零售價」還準不準
+# S1：量價雙確認進貨。三個門檻是事先給定的（任務需求），不是用這份資料調出來的 → 結果才算樣本外
+S1_MAX_R = 1.0                   # 近 3 日價 ÷ 往年同期（至少 2 個往年）≤ 1.0
+S1_MAX_PCT = 0.75                # 一年百分位 ≤ 75%（price_core.year_stats，跟 App 詳細頁同一套）
+S1_MIN_SUP = 1.1                 # 到貨量比 ≥ 1.1
+S1_MIN_YEARS = 2
+S1_MIN_PRIOR_DAYS = 200          # 品項篩選：評估起點「以前」至少 200 個交易日（只用起點前的資料決定測不測，避免偷看未來）
+# S2：雜訊過濾。想法參考 midssinglin/taiwan-price（沒有授權條款，只借想法，程式自行撰寫）；數字事先給定、沒有用這份資料調
+S2_WIN_DAYS = 30                 # 看近 30 天（日曆天）
+S2_MIN_WIN = 5                   # 近 30 天不到 5 個交易日：變異係數算不準 → 不發訊號
+S2_CV_MAX = 0.3                  # 近 30 天均價的變異係數（標準差 ÷ 平均）上限
+S2_VOL_PCTL = 0.25               # 量門檻＝該市場各品項「前 365 天平均每交易日成交量」的第 25 百分位；每月初只用之前的資料重算
+S2_VOL_MIN_DAYS = 60             # 算門檻時，前 365 天至少 60 個交易日的品項才列入
 
 
 def iso_add(iso, n):
@@ -102,11 +119,71 @@ def fmt_pct(x):
     return "—" if x is None else f"{x * 100:+.1f}%"
 
 
-# ───────────────────────── A. 貴賤判斷 ─────────────────────────
+# ───────────────────────── A. 貴賤判斷（＋S2 雜訊過濾） ─────────────────────────
+def s2_thresholds(crops):
+    """S2 的量門檻 {YYYY-MM: 公斤/交易日}：每個月初，只用「那個月 1 號以前 365 天」的資料，
+    取該市場各品項平均每交易日成交量的第 25 百分位（不偷看當月以後；品項太少的月份不給門檻＝不發訊號）。"""
+    months = sorted({d[:7] for es in crops.values() for d, _ in es})
+    idx = {c: ([d for d, _ in es], [0] + list(itertools.accumulate((v.get("qty") or 0) for _, v in es)))
+           for c, es in crops.items()}
+    out = {}
+    for ym in months:
+        m0 = ym + "-01"
+        lo = iso_add(m0, -365)
+        vals = []
+        for ds, cum in idx.values():
+            a, b = bisect.bisect_left(ds, lo), bisect.bisect_left(ds, m0)
+            if b - a >= S2_VOL_MIN_DAYS:
+                vals.append((cum[b] - cum[a]) / (b - a))
+        if len(vals) >= 5:
+            vals.sort()
+            out[ym] = vals[int(len(vals) * S2_VOL_PCTL)]
+    return out
+
+
+def s2_check(es, i, thr):
+    """第 i 天收市後能不能發訊號（只看第 i 天含以前）：回傳 (通過?, 原因 ok／thin／cv／vol)。"""
+    lo = iso_add(es[i][0], -S2_WIN_DAYS)
+    j = i
+    while j >= 0 and es[j][0] > lo:
+        j -= 1
+    win = es[j + 1:i + 1]
+    if len(win) < S2_MIN_WIN:
+        return False, "thin"
+    ps = [v["avg"] for _, v in win]
+    m = sum(ps) / len(ps)
+    cv = (sum((p - m) ** 2 for p in ps) / len(ps)) ** 0.5 / m     # 自己算標準差：statistics 用分數運算，40 萬次太慢
+    if cv > S2_CV_MAX:
+        return False, "cv"
+    th = thr.get(es[i][0][:7])
+    if th is None or sum((v.get("qty") or 0) for _, v in win) / len(win) < th:
+        return False, "vol"
+    return True, "ok"
+
+
+def _tag_stats(rr):
+    """rr＝[(t, 之後 10 個交易日平均漲跌)]：各標籤的比例、平均、命中率，以及差距（偏便宜後平均 − 偏貴後平均）。"""
+    st = {}
+    for t in ("dn", "mid", "up"):
+        f = [x for tt, x in rr if tt == t]
+        hit = (sum(1 for x in f if (x > 0 if t == "dn" else x < 0)) / len(f)) if f and t != "mid" else None
+        st[t] = {"n": len(f), "share": len(f) / len(rr) if rr else 0,
+                 "mean": statistics.mean(f) if f else None, "median": statistics.median(f) if f else None, "hit": hit}
+    st["spread"] = (st["dn"]["mean"] - st["up"]["mean"]) if st["dn"]["mean"] is not None and st["up"]["mean"] is not None else None
+    st["all_mean"] = statistics.mean(x for _, x in rr) if rr else None
+    st["n"] = len(rr)
+    return st
+
+
 def eval_tags(markets):
-    rows = []   # (rule, tag, fwd)
+    """同一批樣本比：舊法、往年同期（App 現用，1 個往年就算）、往年同期但要 2 個往年（F1 試驗）、
+    往年同期＋S2 雜訊過濾（沒通過＝不發訊號，算成 mid）。"""
+    rows = {"舊": [], "新": [], "新2年": [], "S2": [], "S2濾掉": []}
     basis_cnt = {"s": 0, "r": 0}
+    only1 = {"新": [], "新2年": []}           # 只有 1 個往年可比的樣本：兩種規則唯一不同的地方
+    why = {"thin": 0, "cv": 0, "vol": 0, "ok": 0}
     for mk, crops in markets.items():
+        thr = s2_thresholds(crops)
         for c, es in crops.items():
             if len(es) < MIN_DAYS:
                 continue
@@ -114,74 +191,154 @@ def eval_tags(markets):
                 if es[i][0] < Y2_START:
                     continue
                 pre = es[:i + 1]
-                new_t, new_b = pc.season_signal(pre)
+                smp = pc.season_sample(pre, pre[-1][0])      # 掃一次，兩種年數門檻共用
+                new_t, new_b = pc.season_signal(pre, sample=smp)
+                t2, b2 = pc.season_signal(pre, min_years=2, sample=smp)
                 old_t, _ = pc.old_signal(pre)
                 entry = es[i + 1][1]["avg"]
                 fut = statistics.mean(v["avg"] for _, v in es[i + 2:i + 2 + FWD_DAYS])
                 fwd = fut / entry - 1
-                rows.append(("舊", old_t, fwd))
-                rows.append(("新", new_t, fwd))
+                rows["舊"].append((old_t, fwd))
+                rows["新"].append((new_t, fwd))
+                rows["新2年"].append((t2, fwd))
+                if new_b == "s" and b2 == "r":
+                    only1["新"].append((new_t, fwd))
+                    only1["新2年"].append((t2, fwd))
+                ok, reason = s2_check(es, i, thr) if new_t != "mid" else (True, "ok")
+                if new_t != "mid":
+                    why[reason] += 1
+                rows["S2"].append((new_t if ok else "mid", fwd))
+                if not ok:
+                    rows["S2濾掉"].append((new_t, fwd))
                 basis_cnt[new_b] += 1
-    out = {}
-    for rule in ("舊", "新"):
-        rr = [r for r in rows if r[0] == rule]
-        st = {}
-        for t in ("dn", "mid", "up"):
-            f = [r[2] for r in rr if r[1] == t]
-            hit = (sum(1 for x in f if (x > 0 if t == "dn" else x < 0)) / len(f)) if f and t != "mid" else None
-            st[t] = {"n": len(f), "share": len(f) / len(rr) if rr else 0,
-                     "mean": statistics.mean(f) if f else None, "median": statistics.median(f) if f else None, "hit": hit}
-        st["spread"] = (st["dn"]["mean"] - st["up"]["mean"]) if st["dn"]["mean"] is not None and st["up"]["mean"] is not None else None
-        st["all_mean"] = statistics.mean(r[2] for r in rr) if rr else None
-        out[rule] = st
+    out = {rule: _tag_stats(rr) for rule, rr in rows.items()}
     out["basis"] = basis_cnt
+    out["only1"] = {k: _tag_stats(v) for k, v in only1.items()}
+    out["s2_why"] = why
     return out
 
 
-# ───────────────────────── B. 季節低價進貨 ─────────────────────────
-def sim_buying(es, cap_weeks):
-    """回傳 (策略每公斤成本, 基準每公斤成本, 策略多進貨次數)；只用第 2 年。"""
-    idx = [i for i, (d, _) in enumerate(es) if d >= Y2_START]
-    if len(idx) < 60:
-        return None
+# ───────────────────────── B／S1. 進貨模擬（共用同一套帳） ─────────────────────────
+def _weeks(es, start):
+    """start 起每個 ISO 週的交易日索引（依週排序）。"""
     weeks = {}
-    for i in idx:
-        y, w, _ = date.fromisoformat(es[i][0]).isocalendar()
-        weeks.setdefault((y, w), []).append(i)
-    wk_keys = sorted(weeks)
-    cap = WEEKLY_NEED * cap_weeks
+    for i, (d, _) in enumerate(es):
+        if d >= start:
+            y, w, _ = date.fromisoformat(d).isocalendar()
+            weeks.setdefault((y, w), []).append(i)
+    return [weeks[k] for k in sorted(weeks)]
 
-    def run(strategy):
-        inv, spent, trips, bought, cheap_buys = 0.0, 0.0, 0, 0.0, 0
-        for k in wk_keys:
-            days = weeks[k]
-            first = days[0]
-            if inv < WEEKLY_NEED:                                   # 週初不夠用：照當天價補足（被迫買）
-                q = WEEKLY_NEED - inv
-                spent += q * es[first][1]["avg"]
-                trips += 1
-                bought += q
-                inv += q
-            if strategy:
-                for i in days:
-                    if i + 1 >= len(es) or inv >= cap:
-                        continue
-                    st, sb = pc.season_signal(es[:i + 1])
-                    if st == "dn" and sb == "s":                    # 往年同期基準下「偏便宜」→ 隔天多進到存量上限
-                        q = cap - inv
-                        spent += q * es[i + 1][1]["avg"]
-                        trips += 1
-                        bought += q
-                        inv += q
-                        cheap_buys += 1
-            inv -= WEEKLY_NEED
-            inv *= (1 - LOSS_PER_WEEK)                               # 存放損耗
-        leftover_value = max(inv, 0) * es[-1][1]["avg"]
-        used = WEEKLY_NEED * len(wk_keys)
-        return (spent + trips * TRIP_COST - leftover_value) / used, cheap_buys
-    s_cost, n_cheap = run(True)
-    b_cost, _ = run(False)
+
+def _run_stock(es, wk_days, cap, trigger=None, loss=None):
+    """每週固定用 WEEKLY_NEED 公斤：週初不夠就照當天價補足（被迫買）；trigger(i) 成立（第 i 天收市後的判斷，只准看 es[:i+1]）
+    就隔一個交易日進到存量上限 cap。每趟運費 TRIP_COST、週末剩下的庫存損耗 LOSS_PER_WEEK；最後剩的庫存照最後一天價算回來。
+    trigger=None＝每週固定進貨；loss 只給敏感度分析改（預設 LOSS_PER_WEEK）。回傳 (每公斤成本, 加碼次數)。"""
+    loss = LOSS_PER_WEEK if loss is None else loss
+    inv, spent, trips, extra = 0.0, 0.0, 0, 0
+    for days in wk_days:
+        if inv < WEEKLY_NEED:
+            q = WEEKLY_NEED - inv
+            spent += q * es[days[0]][1]["avg"]
+            trips += 1
+            inv += q
+        if trigger:
+            for i in days:
+                if i + 1 >= len(es) or inv >= cap:
+                    continue
+                if trigger(i):
+                    q = cap - inv
+                    spent += q * es[i + 1][1]["avg"]
+                    trips += 1
+                    inv += q
+                    extra += 1
+        inv -= WEEKLY_NEED
+        inv *= (1 - loss)
+    leftover_value = max(inv, 0) * es[-1][1]["avg"]
+    return (spent + trips * TRIP_COST - leftover_value) / (WEEKLY_NEED * len(wk_days)), extra
+
+
+def _run_daily(es, wk_days):
+    """每天買：每個交易日只進當天要用的量（這週用量 ÷ 這週交易日數），每天一趟運費、不囤貨所以沒有存放損耗。
+    回傳 (含運費每公斤, 只算菜錢每公斤)——商人本來就天天跑市場時，運費可以當成沒有多花。"""
+    spent, trips = 0.0, 0
+    for days in wk_days:
+        q = WEEKLY_NEED / len(days)
+        for i in days:
+            spent += q * es[i][1]["avg"]
+            trips += 1
+    used = WEEKLY_NEED * len(wk_days)
+    return (spent + trips * TRIP_COST) / used, spent / used
+
+
+def _hindsight(es, wk_days, cap_weeks, loss=None):
+    """事後最佳（上限）：已經知道全部價格時，在同一套規則（每週初要有貨、最多囤 cap_weeks 週、週末損耗、每趟運費）下最便宜的進貨排程。
+    動態規劃：f[k]＝前 k 週都備好貨的最低花費。一趟可以在第 j 週買下第 k～k+m−1 週的量（含損耗要多買的部分）：
+    j＜k 時挑那週最便宜的一天；j＝k 只能是週初那天（那週要用的貨週初就要有）；最久放 cap_weeks 週（存量不會超過上限）。
+    每週固定進貨是其中一種排法，所以結果一定不比它貴。"""
+    K = len(wk_days)
+    minp = [min(es[i][1]["avg"] for i in days) for days in wk_days]
+    keep = 1 - (LOSS_PER_WEEK if loss is None else loss)
+    f = [float("inf")] * (K + 1)
+    f[0] = 0.0
+    for k in range(K):
+        for j in range(max(0, k - cap_weeks + 1), k + 1):
+            p = minp[j] if j < k else es[wk_days[k][0]][1]["avg"]
+            qty = 0.0
+            for m in range(1, min(cap_weeks - (k - j), K - k) + 1):
+                qty += WEEKLY_NEED / keep ** (k + m - 1 - j)
+                c = f[k] + p * qty + TRIP_COST
+                if c < f[k + m]:
+                    f[k + m] = c
+    return f[K] / (WEEKLY_NEED * K)
+
+
+def _b_trigger(es, i):
+    """B：往年同期基準下「偏便宜」（App 線上同一套規則）。"""
+    st, sb = pc.season_signal(es[:i + 1])
+    return st == "dn" and sb == "s"
+
+
+def _s1_trigger(es, i):
+    """S1 量價雙確認：近 3 日價 ÷ 往年同期（至少 2 個往年）≤ 1.0、一年百分位 ≤ 75%、到貨量比 ≥ 1.1。只看第 i 天（含）以前。"""
+    pre = es[:i + 1]
+    y = pc.year_stats(pre)                                   # 先算便宜的（只掃一年），不成立就不必掃 5 年找往年同期
+    if not y or y["pct"] > S1_MAX_PCT or y["sup"] is None or y["sup"] < S1_MIN_SUP:
+        return False
+    base, _ = pc.season_baseline(pre, pre[-1][0], min_years=S1_MIN_YEARS)
+    return base is not None and pc.recent_price(pre)[0] / base <= S1_MAX_R
+
+
+def sim_buying(es, cap_weeks):
+    """B：回傳 (策略每公斤成本, 基準每公斤成本, 策略多進貨次數)；只用第 2 年起。"""
+    if sum(1 for d, _ in es if d >= Y2_START) < 60:
+        return None
+    wk, cap = _weeks(es, Y2_START), WEEKLY_NEED * cap_weeks
+    s_cost, n_cheap = _run_stock(es, wk, cap, lambda i: _b_trigger(es, i))
+    b_cost, _ = _run_stock(es, wk, cap)
     return s_cost, b_cost, n_cheap
+
+
+def eval_s1(markets, start, loss=None):
+    """S1 跟每週固定、每天買、B、事後最佳比；同一段期間（start 起）、同一批品項。
+    品項只用 start 以前的資料篩（至少 S1_MIN_PRIOR_DAYS 個交易日），不看之後有沒有繼續交易。
+    loss：存放損耗（敏感度分析用：損耗設 0 時贏不贏，分得出是「買得不夠便宜」還是「被損耗吃掉」）。"""
+    res = []
+    for mk in ("台北一", "台中", "西螺", "高雄"):
+        for c, cap_weeks in DURABLE.items():
+            es = markets.get(mk, {}).get(c)
+            if not es or sum(1 for d, _ in es if d < start) < S1_MIN_PRIOR_DAYS:
+                continue
+            wk = _weeks(es, start)
+            if len(wk) < 26:
+                continue
+            cap = WEEKLY_NEED * cap_weeks
+            weekly, _ = _run_stock(es, wk, cap, loss=loss)
+            daily, daily_px = _run_daily(es, wk)
+            b, nb = _run_stock(es, wk, cap, lambda i: _b_trigger(es, i), loss=loss)
+            s1, ns = _run_stock(es, wk, cap, lambda i: _s1_trigger(es, i), loss=loss)
+            res.append({"market": mk, "crop": c, "weeks": len(wk), "weekly": weekly, "daily": daily, "daily_px": daily_px,
+                        "b": b, "b_n": nb, "s1": s1, "s1_n": ns, "best": _hindsight(es, wk, cap_weeks, loss=loss)})
+    return res
 
 
 def eval_buying(markets):
@@ -544,6 +701,9 @@ def report(app_dir, out_path, retail_path=None):
     first = min(es[0][0] for crops in markets.values() for es in crops.values() if es)
     html = open(os.path.join(app_dir, "index.html"), encoding="utf-8").read()
     A, B, C, D = eval_tags(markets), eval_buying(markets), eval_predict(markets), eval_rotation(markets, html)
+    s1_start = iso_add(Y2_START, 365)            # 往年同期要 2 個往年：資料起點＋2 年以後 S1 才可能成立
+    S1 = eval_s1(markets, s1_start)
+    S1_noloss = eval_s1(markets, s1_start, loss=0.0)    # 敏感度：存放完全不損耗時
     E = eval_cross_market(markets, app_dir, ix)
     months = load_retail_months(retail_path) if retail_path else {}
     F = eval_retail(app_dir, ix, months)
@@ -554,13 +714,41 @@ def report(app_dir, out_path, retail_path=None):
     L += ["## A. 偏貴／偏便宜：訊號後 10 個交易日的平均價變化", "",
           "「偏便宜」準＝之後價格上漲（現在買比較划算）；「偏貴」準＝之後價格下跌（等一下再買）。差距＝偏便宜後平均漲幅 − 偏貴後平均漲幅，越大越有用。", "",
           "| 判斷法 | 標偏便宜比例 | 偏便宜後平均 | 命中率 | 標偏貴比例 | 偏貴後平均 | 命中率 | 差距 |", "|---|---|---|---|---|---|---|---|"]
-    for rule, name in (("舊", "舊：單日 vs 近 90 筆 ±10%"), ("新", "新：近 3 日 vs 往年同期 0.88/1.12")):
+    hit = lambda x: fmt_pct(x).lstrip("+")
+    for rule, name in (("舊", "舊：單日 vs 近 90 筆 ±10%"), ("新", "新：近 3 日 vs 往年同期 0.88/1.12（App 現用）"),
+                       ("新2年", "同上，但往年同期要來自 2 個以上往年（試驗，未採用）")):
         s = A[rule]
-        L.append(f"| {name} | {s['dn']['share']*100:.0f}% | {fmt_pct(s['dn']['mean'])} | {fmt_pct(s['dn']['hit']).lstrip('+')} | "
-                 f"{s['up']['share']*100:.0f}% | {fmt_pct(s['up']['mean'])} | {fmt_pct(s['up']['hit']).lstrip('+')} | {fmt_pct(s['spread'])} |")
+        L.append(f"| {name} | {s['dn']['share']*100:.0f}% | {fmt_pct(s['dn']['mean'])} | {hit(s['dn']['hit'])} | "
+                 f"{s['up']['share']*100:.0f}% | {fmt_pct(s['up']['mean'])} | {hit(s['up']['hit'])} | {fmt_pct(s['spread'])} |")
     tot = sum(A["basis"].values()) or 1
+    o1, o2 = A["only1"]["新"], A["only1"]["新2年"]
+    better2 = (A["新2年"]["dn"]["hit"] or 0) >= (A["新"]["dn"]["hit"] or 0) and (A["新2年"]["spread"] or 0) >= (A["新"]["spread"] or 0)
     L += ["", f"新判斷法用到「往年同期」基準的比例：{A['basis']['s']/tot*100:.0f}%（其餘樣本不足、退回近 90 筆）。",
-          f"全部樣本的平均變化（基準線）：{fmt_pct(A['新']['all_mean'])}。", ""]
+          f"全部樣本的平均變化（基準線）：{fmt_pct(A['新']['all_mean'])}。", "",
+          f"「要 2 個往年」（避免只有 1 年可比時被那年的颱風、寒流帶偏）只影響「只有 1 個往年可比」的 {o1['n']} 個樣本"
+          f"（{o1['n']/tot*100:.0f}%，大多在樣本外第一年）：用那 1 年判斷，偏便宜命中 {hit(o1['dn']['hit'])}、差距 {fmt_pct(o1['spread'])}；"
+          f"改成退回近 90 筆，偏便宜命中 {hit(o2['dn']['hit'])}、差距 {fmt_pct(o2['spread'])}。"
+          + ("→ 要 2 個往年比較好。" if better2 else "→ 只有 1 年可比時，用那 1 年仍比退回舊法準；App 維持「1 個往年就判斷」，不採用。"), ""]
+    cur, s2, cut = A["新"], A["S2"], A["S2濾掉"]
+    why = A["s2_why"]
+    nsig = sum(why.values()) or 1
+    beats2 = (s2["dn"]["hit"] or 0) > (cur["dn"]["hit"] or 0) and (s2["up"]["hit"] or 0) > (cur["up"]["hit"] or 0) \
+        and (s2["spread"] or 0) > (cur["spread"] or 0)
+    L += ["## S2. 雜訊過濾：價格忽高忽低或成交量太小時，不發「偏貴／偏便宜」訊號", "",
+          f"規則：近 {S2_WIN_DAYS} 天均價的變異係數（標準差÷平均）≤ {S2_CV_MAX:g}，而且近 {S2_WIN_DAYS} 天平均每交易日成交量 ≥ 該市場門檻才發訊號"
+          f"（近 {S2_WIN_DAYS} 天不到 {S2_MIN_WIN} 個交易日也不發）。門檻＝每月 1 號只用之前 365 天算的「該市場各品項平均每交易日成交量」"
+          f"第 {S2_VOL_PCTL*100:.0f} 百分位。數字事先給定、沒有用這份資料調；跟 A 同一批樣本。", "",
+          "| 判斷法 | 偏便宜訊號數 | 偏便宜後平均 | 命中率 | 偏貴訊號數 | 偏貴後平均 | 命中率 | 差距 |", "|---|---|---|---|---|---|---|---|"]
+    for s, name in ((cur, "現行：往年同期，不過濾"), (s2, "S2：過濾後"), (cut, "（被 S2 濾掉的那些訊號）")):
+        L.append(f"| {name} | {s['dn']['n']:,} | {fmt_pct(s['dn']['mean'])} | {hit(s['dn']['hit'])} | "
+                 f"{s['up']['n']:,} | {fmt_pct(s['up']['mean'])} | {hit(s['up']['hit'])} | {fmt_pct(s['spread'])} |")
+    L += ["", f"{nsig:,} 個訊號被濾掉 {nsig - why['ok']:,} 個：價格變異太大 {why['cv']:,}、成交量低於門檻 {why['vol']:,}、"
+          f"近 {S2_WIN_DAYS} 天交易日太少 {why['thin']:,}。",
+          ("結論：S2 偏便宜、偏貴命中率與差距都比現行好。" if beats2 else
+           f"結論：S2 沒有勝過現行（偏便宜命中 {hit(cur['dn']['hit'])}→{hit(s2['dn']['hit'])}、偏貴 {hit(cur['up']['hit'])}→{hit(s2['up']['hit'])}、"
+           f"差距 {fmt_pct(cur['spread'])}→{fmt_pct(s2['spread'])}），訊號還少了 {(1 - s2['dn']['n'] / max(cur['dn']['n'], 1)) * 100:.0f}%；"
+           f"被濾掉的訊號（價格忽高忽低或量小的品項）差距 {fmt_pct(cut['spread'])}，反而是之後變動最大、最有用的那些。"
+           "不接進 LINE 推播（scripts/notify.py 維持現行）。"), ""]
     L += ["## B. 季節低價進貨（耐放品項）vs 每週固定進貨", "",
           f"每週用 {WEEKLY_NEED} 公斤；運費每趟 {TRIP_COST} 元、存放損耗每週 {LOSS_PER_WEEK*100:.0f}%（假設）。策略：往年同期基準標「偏便宜」時，隔天進到可存放上限。", "",
           "| 市場 | 品項 | 策略每公斤 | 固定進貨每公斤 | 省下 | 多進貨次數 |", "|---|---|---|---|---|---|"]
@@ -568,6 +756,32 @@ def report(app_dir, out_path, retail_path=None):
         L.append(f"| {r['market']} | {r['crop']} | {r['strategy']:.1f} | {r['baseline']:.1f} | {fmt_pct(r['save'])} | {r['cheap_buys']} |")
     if B:
         L += ["", f"平均省下：{fmt_pct(statistics.mean(r['save'] for r in B))}；中位數：{fmt_pct(statistics.median(r['save'] for r in B))}。", ""]
+    L += ["## S1. 量價雙確認進貨（耐放品項）vs 每週固定、每天買、B、事後最佳", "",
+          f"規則：第 t 天收市後，近 3 日價 ÷ 往年同期（要 {S1_MIN_YEARS} 個以上往年）≤ {S1_MAX_R:g}、一年百分位 ≤ {S1_MAX_PCT*100:.0f}%、"
+          f"到貨量比 ≥ {S1_MIN_SUP:g}（後兩個跟 App 詳細頁同一套 price_core.year_stats）→ 隔一個交易日照當天均價進到可存放上限；"
+          "其他時候照每週固定進貨。三個門檻事先給定、沒有用這份資料調。",
+          f"期間：{s1_start} 起（要 2 個往年，這天以後才可能成立）；品項只用這天以前的資料篩（至少 {S1_MIN_PRIOR_DAYS} 個交易日）。"
+          f"每週用 {WEEKLY_NEED} 公斤、運費每趟 {TRIP_COST} 元、存放損耗每週 {LOSS_PER_WEEK*100:.0f}%（同 B）。"
+          "每天買＝每個交易日只進當天用量、每天一趟運費；括號裡只算菜錢（本來就天天跑市場的人，運費不算多花）。"
+          "事後最佳＝已經知道全部價格、同一套規則下最便宜的排法（上限，實際做不到）。表內是每公斤成本（元，含運費與損耗）。", "",
+          "| 市場 | 品項 | 每週固定 | 每天買（只算菜錢） | B 季節低價 | S1 量價雙確認 | 事後最佳 | S1 比每週固定省 | S1 加碼次數 |",
+          "|---|---|---|---|---|---|---|---|---|"]
+    for r in S1:
+        L.append(f"| {r['market']} | {r['crop']} | {r['weekly']:.1f} | {r['daily']:.1f}（{r['daily_px']:.1f}） | {r['b']:.1f} | {r['s1']:.1f} | "
+                 f"{r['best']:.1f} | {fmt_pct(1 - r['s1'] / r['weekly'])} | {r['s1_n']} |")
+    if S1:
+        sv = lambda k: [1 - r[k] / r["weekly"] for r in S1]
+        ms = lambda k: f"{fmt_pct(statistics.mean(sv(k)))}（中位數 {fmt_pct(statistics.median(sv(k)))}）"
+        s1_win = statistics.mean(sv("s1")) > 0 and statistics.median(sv("s1")) > 0
+        nl = lambda k: statistics.mean(1 - r[k] / r["weekly"] for r in S1_noloss) if S1_noloss else None
+        L += ["", f"比每週固定平均省下：每天買 {ms('daily')}、只算菜錢 {ms('daily_px')}；B {ms('b')}；S1 {ms('s1')}；事後最佳 {ms('best')}。"
+              f"S1 比每週固定省到錢的品項：{sum(1 for x in sv('s1') if x > 0)}／{len(S1)}；S1 比 B 平均 {fmt_pct(statistics.mean(1 - r['s1'] / r['b'] for r in S1))}。",
+              f"敏感度（只當參考）：假設存放完全不損耗，S1 {fmt_pct(nl('s1'))}、B {fmt_pct(nl('b'))}"
+              + ("——買到的價錢確實比較低，是每週存放損耗把省下的吃掉；損耗比假設低很多的品項（例如冷藏）才可能划算。" if (nl("s1") or 0) > 0 else "。"),
+              ("結論：S1 勝過每週固定進貨。" if s1_win else
+               f"結論：S1 沒有勝過每週固定進貨（平均 {fmt_pct(statistics.mean(sv('s1')))}，B {fmt_pct(statistics.mean(sv('b')))}）。"
+               f"事後最佳能省 {fmt_pct(statistics.mean(sv('best')))}，代表便宜的時機存在，但當天看得到的這三個數字抓不到。"
+               "不接進 LINE 推播（scripts/notify.py 維持現行）。"), ""]
     L += ["## C. 採收預判（predict_price）準不準", "",
           "MAPE＝平均絕對誤差率（越低越好）；區間命中＝實際價落在預測 P25～P75 的比例（設計上應接近 50%）。", "",
           "| 幾天後 | 樣本 | 模型 MAPE | 價格不變 MAPE | 去年同期 MAPE | 模型贏「不變」 | 模型贏「去年」 | 區間命中 |", "|---|---|---|---|---|---|---|---|"]
@@ -634,7 +848,7 @@ def report(app_dir, out_path, retail_path=None):
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         f.write("\n".join(L) + "\n")
-    return {"A": A, "B": B, "C": C, "D": D, "E": E, "F": F}
+    return {"A": A, "B": B, "S1": S1, "C": C, "D": D, "E": E, "F": F}
 
 
 def main():
