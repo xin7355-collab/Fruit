@@ -467,13 +467,21 @@
 .row.acc{font-size:.85rem;opacity:.85;border-top:1px dashed var(--line);padding-top:.45rem;margin-top:.45rem;}
 .mheat{margin:.7rem 0 .2rem;}
 .mh-t{font-size:.9rem;font-weight:700;margin-bottom:.35rem;}
-.mh-row{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;}
-.mh{border-radius:8px;padding:.3rem 0;text-align:center;background:var(--panel2,#2a2a22);font-size:.78rem;line-height:1.2;border:2px solid transparent;}
-.mh b{display:block;font-weight:700;}.mh small{opacity:.85;}
+/* minmax(0,1fr)：格子裡的字比格子寬時不准把整列撐寬（撐寬＝整頁橫向捲動）；字級大／特大改 4 欄才放得下「量」那一行 */
+.mh-row{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;}
+:root[data-fs="l"] .mh-row,:root[data-fs="xl"] .mh-row{grid-template-columns:repeat(4,minmax(0,1fr));}
+.mh{border-radius:8px;padding:.3rem 0;text-align:center;background:var(--panel2,#2a2a22);font-size:.78rem;line-height:1.2;border:2px solid transparent;overflow-wrap:anywhere;}
+.mh b{display:block;font-weight:700;}.mh small{display:block;opacity:.85;}
+.mh small.mq{font-size:.68rem;opacity:.75;margin-top:.1rem;}
 .mh.hi{background:rgba(228,87,46,.22);}.mh.hi2{background:rgba(228,87,46,.45);}
 .mh.lo{background:rgba(95,184,90,.22);}.mh.lo2{background:rgba(95,184,90,.45);}
+.mh.none{background:transparent;border-style:dashed;border-color:var(--line);color:var(--muted);}
 .mh.na{opacity:.45;}.mh.now{border-color:var(--paper,#EFEAD8);}
 .mh-n{font-size:.75rem;opacity:.7;margin-top:.3rem;}
+.ystat{margin:.5rem 0 .1rem;font-size:.85rem;color:var(--muted);}
+.ystat summary{cursor:pointer;min-height:28px;}
+.ystat summary b{color:var(--paper);}
+.ystat div{margin-top:.3rem;font-size:.8rem;line-height:1.55;}
 .offer{margin:.6rem 0;border:1px solid var(--line);border-radius:var(--radius,12px);padding:.55rem .7rem;background:var(--panel);}
 .offer summary{cursor:pointer;font-weight:700;min-height:28px;}
 .of-row{display:flex;gap:.5rem;margin-top:.5rem;}
@@ -482,6 +490,12 @@
 .of-res{margin-top:.5rem;font-size:.9rem;line-height:1.5;}
 .of-res small{display:block;opacity:.7;font-size:.78rem;}
 .of-res.good b{color:#5FB85A;}.of-res.ok b{color:var(--paper);}.of-res.warn b{color:#E8B04A;}.of-res.bad b{color:#E4572E;}
+/* 目標價：外觀跟報價檢查一樣，但不共用 .offer（測試與其他程式用 details.offer 找報價檢查） */
+.tgtbox{margin:.6rem 0;border:1px solid var(--line);border-radius:var(--radius,12px);padding:.55rem .7rem;background:var(--panel);}
+.tgtbox summary{cursor:pointer;font-weight:700;min-height:28px;overflow-wrap:anywhere;}
+.tgtbox .of-res{font-size:.8rem;opacity:.8;}
+.tg-hit{color:#5FB85A;}.tg-gap{color:var(--paper);}.tg-old{color:#E8B04A;}
+.tg-clr{flex:0 0 auto;font-size:16px;padding:.5rem .8rem;border-radius:10px;border:1px solid var(--line);background:var(--panel2,#2a2a22);color:var(--paper);}
 .qchip{font-size:.72em;font-weight:700;padding:.05rem .4rem;border-radius:999px;margin-left:.3rem;white-space:nowrap;}
 .qchip.lo{background:rgba(232,176,74,.22);color:#E8B04A;}.qchip.hi{background:rgba(95,184,90,.22);color:#5FB85A;}
 .closedbar{background:rgba(232,176,74,.15);border:1px solid rgba(232,176,74,.4);border-radius:var(--radius,12px);padding:.55rem .75rem;margin:.2rem 0 .5rem;font-size:.9rem;}
@@ -686,11 +700,16 @@ details.cmpbt p{margin:.45rem 0 0;line-height:1.55;}
 /* 共用演算法放在 core.js（兩支 App 同一份內容、有單元測試）：這裡直接取用，不再各寫一份 */
 const {doyOf,weekOf,median,pctile,sortedEntries,mergeSeries,toLunar}=Core;
 /* ══════ 基礎 ══════ */
-const VERSION="v1.8.1";
+const VERSION="v1.8.2";
 /* 版本更新紀錄（最新在最上面）。未來每次改版就在陣列最前面新增一筆：
    {v:版本, date:"YYYY-MM-DD", title:"一句話重點", items:[本次更新條列…]}。
    會顯示在「設定→關於 App→更新內容」，改版後第一次開啟也會自動彈一次本版。 */
 const CHANGELOG=[
+  {v:"v1.8.2", date:"2026-11-02", title:"目標價提醒、月份圖加到貨量 🎯", items:[
+    "【新增】目標價：在「我的品項」的詳細頁填想進貨的價錢，打開 App 時「今天進貨參考」會寫「已到價」或「還差幾元」。只存在你的手機，備份會一起匯出。",
+    "【新增】詳細頁多「一年百分位」（今天的價格在近一年排在哪裡）和「到貨量比」（近兩週的到貨量是平常的幾倍），點開有說明。",
+    "【改善】12 個月圖同時列出每個月的價格和到貨量，幾乎沒貨的月份變成灰色虛線框，淡季一眼看出來；標題不再寫「適合多進」，只列數字。",
+  ]},
   {v:"v1.8.1", date:"2026-11-01", title:"K 線換品種、天氣標題一列", items:[
     "【新增】K 線頁品項名稱旁的品種（例：番石榴的珍珠芭）變成下拉選單，點一下就能換看同作物的其他品種。",
     "【調整】拿掉 K 線頁的「‹ 返回」，統一用左上角 ‹。",
@@ -1143,12 +1162,37 @@ function sortBoard(arr,pvOf){const k=boardSort();if(!k)return arr;
    2026-10-31 拿掉「比平常便宜、適合多進」這類判斷（回測準度只有 57～59%，使用者覺得會誤會）。
    多品種作物用主要品種（不用綜合均價）；成交量太小或超過 7 天沒成交的不列。 */
 const DIGEST_KEY="jb_digest";
+/* ── 目標價（2026-11-02）：我的品項可各設一個想進貨的價，打開 App 時在「今天進貨參考」寫「已到價／還差 X 元」──
+   只存在這支手機：localStorage jb_target_市場＝{key:{c:品項,v:品種或null,p:元/公斤}}（jb_ 開頭，會跟著設定備份匯出）。
+   想法參考 midssinglin/taiwan-price 的「收藏到價」（該 repo 沒有授權條款，只借想法，程式自行撰寫）。
+   私密瀏覽等存不進去時不當機：讀不到當作沒設、存不進去跳提示。 */
+const TGT_PREFIX="jb_target_";
+function tgtKey(disp,variety){return variety?`${disp}·${variety}`:disp;}
+function targets(mk){try{const o=JSON.parse(localStorage.getItem(TGT_PREFIX+(mk||MARKET))||"{}");
+  return (o&&typeof o==="object"&&!Array.isArray(o))?o:{};}catch(e){return {};}}
+function targetOf(disp,variety){const x=targets()[tgtKey(disp,variety)];return (x&&x.p>0)?x.p:null;}
+function setTarget(disp,variety,perKg){const mk=MARKET,o=targets(mk),k=tgtKey(disp,variety);
+  if(perKg>0)o[k]={c:disp,v:variety||null,p:Math.round(perKg*100)/100};else delete o[k];
+  try{if(Object.keys(o).length)localStorage.setItem(TGT_PREFIX+mk,JSON.stringify(o));else localStorage.removeItem(TGT_PREFIX+mk);return true;}
+  catch(e){return false;}}
+/* 跟卡片同一個價（最新成交日均價）比。超過 7 天沒成交不說「已到價」：那是舊價，今天去不一定買得到 */
+function tgtStatus(pv,t){if(!pv||!(t>0))return null;
+  if(pv.stale>7)return {cls:"old",txt:`${pv.stale} 天沒成交`};
+  const d=pxU(pv.avg-t);
+  return d<=0?{cls:"hit",txt:"已到價"}:{cls:"gap",txt:`還差 ${d<0.1?d.toFixed(2):d.toFixed(1)} 元`};}
+/* 只列「我的品項」裡設過目標價的（取消勾選的品項先不提醒，目標價保留，重新勾選就回來） */
+function targetRows(){const o=targets(),w=new Set(watchCrops()),out=[];
+  for(const k in o){const x=o[k];if(!x||!(x.p>0)||!w.has(x.c))continue;
+    const pv=priceView(x.c,x.v||undefined),st=tgtStatus(pv,x.p);if(!st)continue;
+    out.push({name:x.v?`${x.c}·${x.v}`:x.c,st,pv,t:x.p});}
+  return out;}
 function digestHTML(){
   if(SEARCH.trim())return "";
   const rows=[];for(const c of availableCrops()){const mv=mainVar(c);const pv=priceView(c,mv||undefined);
     if(pv&&pv.stale<=7&&!pv.thin)rows.push({c,mv,name:mv?`${c}·${mv}`:c,p:pv});}
-  if(rows.length<3)return "";
-  const day=rows.reduce((m,r)=>r.p.date>m?r.p.date:m,"");
+  const tg=targetRows();
+  if(rows.length<3&&!tg.length)return "";
+  const day=[...rows.map(r=>r.p.date),...tg.map(r=>r.pv.date)].reduce((m,d)=>d>m?d:m,"");
   let hidden="";try{hidden=localStorage.getItem(DIGEST_KEY)||"";}catch(e){}
   if(hidden===day)return "";
   const wk=rows.filter(r=>r.p.week!=null&&Math.abs(r.p.week)>=10);
@@ -1159,6 +1203,11 @@ function digestHTML(){
   const fw=l=>l.map(r=>`${r.name}（${r.p.week>=0?"+":""}${r.p.week.toFixed(0)}%）`).join("、");
   const fq=l=>l.map(r=>`${r.name}（${r.p.qr>=2?`平常的 ${Math.round(r.p.qr)} 倍`:`${Math.round(r.p.qr*100)}%`}）`).join("、");
   const lines=[];
+  const ft=l=>l.map(r=>`${r.name} <b>${r.st.txt}</b>（${pxU(r.pv.avg).toFixed(1)}／目標 ${pxU(r.t).toFixed(1)}）`).join("、");
+  const tHit=tg.filter(r=>r.st.cls==="hit"),tGap=tg.filter(r=>r.st.cls==="gap"),tOld=tg.filter(r=>r.st.cls==="old");
+  if(tHit.length)lines.push(`🎯 目標價（${unitU()}）：${ft(tHit)}`);
+  if(tGap.length)lines.push(`🎯 ${tHit.length?"還沒到價":`目標價（${unitU()}）`}：${ft(tGap)}`);
+  if(tOld.length)lines.push(`🎯 最近沒成交：${tOld.map(r=>`${r.name}（${r.st.txt}）`).join("、")}`);
   if(dns.length)lines.push(`📉 較上週跌最多：${fw(dns)}`);
   if(ups.length)lines.push(`📈 較上週漲最多：${fw(ups)}`);
   if(short.length)lines.push(`📦 成交量只有平常一半以下：${fq(short)}`);
@@ -1180,7 +1229,7 @@ function digestHTML(){
   return `<div class="digest"><div class="dg-t">🧾 今天進貨參考（${MARKET} ${md}）`+
     `<button class="dg-x" type="button" data-day="${day}" aria-label="這一天不再顯示">✕</button></div>`+
     lines.map(l=>`<div class="dg-l">${l}</div>`).join("")+
-    `<div class="dg-n">漲跌＝跟上週同一段時間比；成交量＝近 3 個交易日 vs 平常（近 90 天）。只是整理數字，不代表之後會漲或跌。</div></div>`;}
+    `<div class="dg-n">${tg.length?"目標價＝你在詳細頁設的價，跟最新成交日均價比；":""}漲跌＝跟上週同一段時間比；成交量＝近 3 個交易日 vs 平常（近 90 天）。只是整理數字，不代表之後會漲或跌。</div></div>`;}
 function closedNoteHTML(){const ent=((INDEX&&INDEX.markets)||[]).find(m=>m.name===MARKET);const cl=(ent&&ent.closed)||[];
   const t=todayISO();if(!cl.includes(t))return "";
   return `<div class="closedbar">🛑 今天（${+t.slice(5,7)}/${+t.slice(8)} 週${weekdayCh(t)}）${MARKET}休市，以下是上一個交易日的行情。</div>`;}
@@ -1313,7 +1362,7 @@ function renderDetail(disp,variety){
       ${roleNoteHTML(pv.avg)}${retailHTML(disp,pv)}
       <div class="ohlc"><span>最高 <b>${pxU(hi).toFixed(1)}</b></span><span>最低 <b>${pxU(lo).toFixed(1)}</b></span>
         <span>量 <b>${(qty!=null?qty:0).toLocaleString()}</b> 公斤</span></div>
-      ${gradeBandHTML(disp,pv.last[1],true)}
+      ${gradeBandHTML(disp,pv.last[1],true)}${yearStatHTML(variety?variantSeries(disp,variety):seriesFor(disp),pv)}
       <div class="tfline"><span class="cmp">${cmpLineHTML(pv)}</span>
         <div class="tfrow" id="tfrow">${["D","W","M"].map(t=>`<button data-tf="${t}" class="${TF===t?'on':''}">${TF_LABEL[t]}</button>`).join("")}</div></div>
       ${pv.stale>14?`<div class="risk warn" style="margin-top:.5rem">🍂 非當季／近期停售：最後成交 <b>${pv.date}</b>（${pv.stale} 天前），以下為上次產季行情。</div>`:""}
@@ -1324,7 +1373,7 @@ function renderDetail(disp,variety){
       <details class="annobox" id="annobox"><summary id="annosum">📌 為什麼漲跌</summary><div class="annos" id="qanno"></div></details>
       <div class="qtip" id="qtip">👆 橫滑查價（底部日期・右側價格）</div>
     </div>
-    ${monthHeatHTML(variety?variantSeries(disp,variety):seriesFor(disp))}${offerHTML(pv)}
+    ${monthHeatHTML(variety?variantSeries(disp,variety):seriesFor(disp))}${offerHTML(pv)}${targetHTML(disp,variety,pv)}
     <div class="dd-title">📋 農產品交易行情 · 逐日明細</div>
     ${dailyCardsHTML(es)}`;
   const cap=document.getElementById("qcap");if(cap)cap.innerHTML=capFor();
@@ -1339,7 +1388,27 @@ function renderDetail(disp,variety){
   document.querySelectorAll("#tfrow button").forEach(b=>b.onclick=()=>{TF=b.dataset.tf;renderDetail(disp,variety);});
   attachCross(box);
   bindOffer(pv);
+  bindTarget(disp,variety,pv);
 }
+/* 詳細頁「🎯 目標價」：只有我的品項能設（看板的提醒只看我的品項）；輸入用目前單位，存成元/公斤（切台斤不會變價） */
+function tgtSummary(disp,variety,pv){const t=targetOf(disp,variety);if(!t)return "🎯 目標價（到價提醒）";
+  const st=tgtStatus(pv,t);
+  return `🎯 目標價 <b>${pxU(t).toFixed(1)}</b> ${unitU()}${st?` · <span class="tg-${st.cls}">${st.txt}</span>`:""}`;}
+function targetHTML(disp,variety,pv){
+  if(!watchCrops().includes(disp))return `<details class="tgtbox"><summary>🎯 目標價（到價提醒）</summary>
+    <div class="of-res">先到 ⚙️ 設定 → 我的品項 勾選「${disp}」，就能設目標價。</div></details>`;
+  const t=targetOf(disp,variety);
+  return `<details class="tgtbox" id="tgtBox"><summary id="tgtSum">${tgtSummary(disp,variety,pv)}</summary>
+    <div class="of-row"><input id="tgtIn" type="number" inputmode="decimal" min="0" step="0.1" placeholder="想進貨的價（${unitU()}）" aria-label="目標價" value="${t?+pxU(t).toFixed(2):""}">
+      <button type="button" id="tgtClr" class="tg-clr">清除</button></div>
+    <div class="of-res">跟最新成交日均價比；打開 App 時「今天進貨參考」會寫已到價或還差多少。只存在這支手機。</div></details>`;}
+function bindTarget(disp,variety,pv){const ip=document.getElementById("tgtIn"),clr=document.getElementById("tgtClr"),sum=document.getElementById("tgtSum");
+  if(!ip||!clr||!sum)return;
+  const save=()=>{const v=parseFloat(ip.value);
+    if(ip.value!==""&&!(v>0&&v<100000)){toast("目標價要填大於 0 的數字");return;}
+    if(!setTarget(disp,variety,v>0?v/unitF():0)){toast("這支手機不讓 App 存設定（可能是私密瀏覽），目標價沒存到");return;}
+    sum.innerHTML=tgtSummary(disp,variety,pv);toast(v>0?"已存目標價":"已清除目標價");};
+  ip.onchange=save;clr.onclick=()=>{ip.value="";save();};}
 /* 農產品交易行情逐日明細：近 12 個交易日，每日一卡（上/中/下/均價・漲跌・成交量・農曆） */
 function dailyCardsHTML(es){
   const n=12;const s=es.slice(-(n+1));const rows=[];
@@ -1370,14 +1439,26 @@ function tfSeries(es){
     else{o.high=Math.max(o.high,v.high);o.low=Math.min(o.low,v.low);o.sum+=v.avg;o.n++;o.qty+=v.qty||0;o.date=iso;}}
   return [...g.values()].map(o=>[o.date,{high:o.high,low:o.low,avg:+(o.sum/o.n).toFixed(1),qty:Math.round(o.qty)}]);
 }
-/* 12 個月價格指數（近 2 年各月中位數 ÷ 全期中位數）：農友看高價月、商人看便宜月 */
+/* 12 個月價格與到貨量（近 2 年）：只描述，不寫「適合多進／錯開出貨」（2026-10-31 使用者要求不下貴賤判斷）。
+   量＝該月平均每個日曆天的到貨量 ÷ 全期平均（Core.monthIndex）；不到 3 成＝幾乎沒貨，整格變灰，淡季一眼看得出來。 */
+const MH_LOW_SUPPLY=0.3;
 function monthHeatHTML(s){const mi=Core.monthIndex(s);if(mi.filter(x=>x.idx!=null).length<6)return "";
-  const cur=new Date().getMonth()+1;
-  const title=APP==="merchant"?"📅 哪幾個月便宜（近 2 年；綠＝便宜月，適合多進）":"📅 哪幾個月價格高（近 2 年；紅＝高價月，適合錯開出貨）";
-  return `<div class="mheat"><div class="mh-t">${title}</div><div class="mh-row">`+mi.map(x=>{const v=x.idx;
-    const c=v==null?"na":v>=1.15?"hi2":v>=1.05?"hi":v<=0.85?"lo2":v<=0.95?"lo":"mid";
-    return `<div class="mh ${c}${x.m===cur?" now":""}"><b>${x.m}月</b><small>${v==null?"–":Math.round(v*100)+"%"}</small></div>`;}).join("")+
-    `</div><div class="mh-n">數字＝該月中位價是全年中位數的幾 %；外框＝本月。</div></div>`;}
+  const cur=new Date().getMonth()+1,hasQ=mi.some(x=>x.vol!=null);
+  return `<div class="mheat"><div class="mh-t">📅 12 個月價格${hasQ?"與到貨量":""}（近 2 年）</div><div class="mh-row">`+mi.map(x=>{const v=x.idx;
+    const none=x.vol!=null&&x.vol<MH_LOW_SUPPLY;
+    const c=none?"none":v==null?"na":v>=1.15?"hi2":v>=1.05?"hi":v<=0.85?"lo2":v<=0.95?"lo":"mid";
+    return `<div class="mh ${c}${x.m===cur?" now":""}"><b>${x.m}月</b><small>${v==null?"–":Math.round(v*100)+"%"}</small>`+
+      (hasQ?`<small class="mq">量${x.vol==null?"–":Math.round(x.vol*100)+"%"}</small>`:"")+`</div>`;}).join("")+
+    `</div><div class="mh-n">上：該月中位價是全期中位數的幾 %（紅底較高、綠底較低）`+
+    (hasQ?`；下「量」：該月平均每天到貨量是全期平均的幾 %；灰色虛線框＝幾乎沒有到貨（不到 3 成）`:"")+`；外框＝本月。</div></div>`;}
+/* 一年百分位、到貨量比（Core.yearStats）：只寫數字、說明收進 <details>。非當季（超過 14 天沒成交）不顯示：
+   那時的「最新價」是上一季的，跟今天沒關係；近一年交易日太少（品種歷史還在下載）也不顯示，下載完會重畫 */
+function yearStatHTML(s,pv){const y=Core.yearStats(s);if(!y||!pv||pv.stale>14)return "";
+  const p=Math.round(y.pct*100),md=`${+y.last.slice(5,7)}/${+y.last.slice(8)}`;
+  return `<details class="ystat"><summary>一年百分位 <b>${p}%</b>${y.sup!=null?` · 到貨量比 <b>${y.sup.toFixed(2)}</b>`:""}</summary>`+
+    `<div>一年百分位：近一年 ${y.n} 個交易日中，有 ${p}% 的日子均價比 ${md} 低（0%＝一年最低、100%＝一年最高）。`+
+    (y.sup!=null?`<br>到貨量比：近 14 天平均每天到貨量 ÷ 近一年平均（1＝跟平常一樣、2＝平常的 2 倍）。`:"")+
+    `<br>只描述現在的位置，不代表之後會漲或跌。</div></details>`;}
 /* 開價檢查：對方報價 vs 當日批發上/中/下價（農友比「扣手續費後實得」，比例在採收預判的成本區可調） */
 function offerHTML(pv){const farmer=APP!=="merchant";const tai=UNIT==="tai";
   return `<details class="offer"><summary>💰 ${farmer?"販仔開價檢查":"報價檢查"}（跟 ${pv.date.slice(5)} 批發價比）</summary>

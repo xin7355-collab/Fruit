@@ -514,6 +514,106 @@ async function checkNavBack(ctx, url) {
   await p.close();
 }
 
+async function checkYearStatsAndMonths(ctx, url, name) {
+  // 2026-11-02：詳細頁「一年百分位／到貨量比」、12 個月圖加到貨量；都只寫數字（看板不下貴賤判斷）
+  const pre = name === "merchant" ? "jb_" : "vs_";
+  const p = await ctx.newPage(); const errs = [];
+  p.on("pageerror", (e) => errs.push(e.message));
+  await p.goto(url, { waitUntil: "networkidle" });
+  if (await p.locator("#clModal.on").count()) await p.click("#closeCl");
+  // 資料天天變：不寫死品項，挑一個近 14 天有成交、近一年資料夠的
+  const c = await p.evaluate(() => availableCrops().find((x) => { const pv = priceView(x); return pv && pv.stale <= 14 && Core.yearStats(seriesFor(x)); }));
+  if (!c) { check(false, `${name} 找不到有一年資料的品項，無法驗一年百分位`); await p.close(); return; }
+  await p.evaluate((x) => openDetail(x, null), c); await p.waitForTimeout(500);
+  const ys = await p.evaluate(() => { const d = document.querySelector("#mktDetail .ystat"); return d ? d.textContent : ""; });
+  const want = await p.evaluate((x) => { const y = Core.yearStats(seriesFor(x)); return { p: Math.round(y.pct * 100), s: y.sup == null ? null : y.sup.toFixed(2) }; }, c);
+  check(ys.includes(`一年百分位 ${want.p}%`) && (want.s === null || ys.includes(`到貨量比 ${want.s}`)), `${name} 詳細頁有一年百分位、到貨量比（${c}：${ys.slice(0, 28)}）`);
+  check(!/偏貴|偏便宜|適合|划算/.test(ys), `${name} 一年百分位只寫數字、不下貴賤判斷`);
+  const mh = await p.evaluate(() => ({ t: (document.querySelector("#mktDetail .mh-t") || {}).textContent || "",
+    n: document.querySelectorAll("#mktDetail .mh").length, q: document.querySelectorAll("#mktDetail .mh .mq").length }));
+  check(mh.n === 12 && mh.q === 12 && mh.t.includes("到貨量") && !/適合|便宜月|高價月/.test(mh.t), `${name} 12 個月圖同時有價格與到貨量、標題不下判斷（${mh.t}）`);
+  // 模擬淡季：拿掉 6～8 月的成交 → 那 3 格要變灰（幾乎沒貨）
+  await p.evaluate((x) => { const s = seriesFor(x); for (const d of Object.keys(s)) if (["06", "07", "08"].includes(d.slice(5, 7))) delete s[d]; renderDetail(x, null); }, c);
+  const none = await p.evaluate(() => [...document.querySelectorAll("#mktDetail .mh.none b")].map((b) => b.textContent));
+  check(["6月", "7月", "8月"].every((m) => none.includes(m)), `${name} 沒到貨的月份變灰（${none.join("、")}）`);
+  // 特大字：月份格與說明不撐寬畫面
+  await p.evaluate((k) => { localStorage.setItem(k, "xl"); applyFont(); const d = document.querySelector("#mktDetail .ystat"); if (d) d.open = true; }, pre + "fs");
+  await p.waitForTimeout(200);
+  const over = await p.evaluate(() => [...document.querySelectorAll("#mktDetail .mh")].filter((e) => e.scrollWidth > e.clientWidth + 1).length);
+  check(await noHScroll(p) && over === 0, `${name} 特大字：一年百分位、12 個月圖沒有橫向捲動、格子沒被字撐破（${over}）`);
+  await p.locator("#mktDetail .mheat").screenshot({ path: path.join(OUT, `${name}-month-grid-xl.png`) });
+  await p.evaluate((k) => localStorage.removeItem(k), pre + "fs");
+  check(errs.length === 0, `${name} 一年百分位／月份圖沒有 JS 錯誤${errs.length ? "：" + errs.slice(0, 2).join(" | ") : ""}`);
+  await p.close();
+}
+
+async function checkTargetPrice(ctx, url) {
+  // 2026-11-02：我的品項設目標價 → 看板「今天進貨參考」寫已到價／還差 X 元；只存在手機（jb_target_市場）
+  const p = await ctx.newPage(); const errs = [];
+  p.on("pageerror", (e) => errs.push(e.message));
+  await p.goto(url, { waitUntil: "networkidle" });
+  if (await p.locator("#clModal.on").count()) await p.click("#closeCl");
+  await p.evaluate(() => localStorage.removeItem("jb_digest"));
+  const pick = await p.evaluate(() => { for (const c of watchCrops()) { const v = mainVar(c); const pv = priceView(c, v || undefined);
+    if (pv && pv.stale <= 7) return { c, v, avg: pv.avg, mk: MARKET }; } return null; });
+  if (!pick) { check(false, "merchant 我的品項裡沒有近 7 天有成交的，無法驗目標價"); await p.close(); return; }
+  const key = "jb_target_" + pick.mk, label = pick.v ? `${pick.c}·${pick.v}` : pick.c;
+  const openIt = async () => { await p.evaluate(({ c, v }) => openDetail(c, v), pick); await p.waitForTimeout(400);
+    await p.evaluate(() => { document.getElementById("tgtBox").open = true; }); };
+  const setTo = async (v) => { await p.fill("#tgtIn", String(v)); await p.dispatchEvent("#tgtIn", "change"); await p.waitForTimeout(200); };
+  const digest = async () => { await p.click("#navBack"); await p.waitForTimeout(500); return (await p.textContent(".digest").catch(() => "")) || ""; };
+  await openIt();
+  check((await p.textContent("#tgtSum")).includes("到價提醒"), "merchant 詳細頁有「🎯 目標價」，還沒設時寫「到價提醒」");
+  const high = Math.ceil(pick.avg) + 5;
+  await setTo(high);
+  check((await p.textContent("#tgtSum")).includes("已到價"), `merchant 目標價 ${high} ≥ 現價 ${pick.avg} → 已到價`);
+  const st = await p.evaluate((k) => JSON.parse(localStorage.getItem(k) || "null"), key);
+  check(!!st && Object.values(st).some((x) => x.c === pick.c && x.p === high), `merchant 目標價只存在手機（${key}）`);
+  let dg = await digest();
+  check(dg.includes("🎯") && dg.includes(label) && dg.includes("已到價"), `merchant 看板「今天進貨參考」寫 ${label} 已到價`);
+  check(!/適合|偏貴|偏便宜/.test(dg), "merchant 目標價提醒只講事實");
+  check(await noHScroll(p), "merchant 目標價提醒沒有橫向捲動");
+  await p.screenshot({ path: path.join(OUT, "merchant-target-digest.png") });
+  // 目標價低於現價 → 還差 X 元；切台斤要換算（存的是元/公斤）
+  await openIt();
+  const low = Math.round(pick.avg * 5) / 10, gapKg = pick.avg - low, gapTai = gapKg * 0.6;
+  const fx = (d) => (d < 0.1 ? d.toFixed(2) : d.toFixed(1));
+  await setTo(low);
+  check((await p.textContent("#tgtSum")).includes(`還差 ${fx(gapKg)} 元`), `merchant 目標價 ${low} < 現價 ${pick.avg} → 還差 ${fx(gapKg)} 元`);
+  await p.click('#dtlUnit button[data-u="tai"]'); await p.waitForTimeout(300);
+  const sumTai = await p.textContent("#tgtSum");
+  check(sumTai.includes("元/台斤") && sumTai.includes(`還差 ${fx(gapTai)} 元`) && (await p.inputValue("#tgtIn")) === String(+(low * 0.6).toFixed(2)),
+    `merchant 切台斤：目標價與差額都換算（${sumTai.trim()}）`);
+  await p.click('#dtlUnit button[data-u="kg"]'); await p.waitForTimeout(300);
+  dg = await digest();
+  check(dg.includes(label) && dg.includes(`還差 ${fx(gapKg)} 元`), `merchant 看板寫 ${label} 還差 ${fx(gapKg)} 元`);
+  // 填錯不存；手機不讓存（私密瀏覽）要說、不當機；存的東西壞掉當作沒設
+  await openIt();
+  await setTo(-5);
+  const kept = await p.evaluate(({ k, low }) => Object.values(JSON.parse(localStorage.getItem(k))).some((x) => x.p === low), { k: key, low });
+  check(kept && (await p.textContent("#toast")).includes("大於 0"), "merchant 目標價填負數：不存、提示要填大於 0");
+  await p.evaluate(() => { window.__si = Storage.prototype.setItem; Storage.prototype.setItem = function () { throw new Error("QuotaExceededError"); }; });
+  await setTo(7);
+  await p.evaluate(() => { Storage.prototype.setItem = window.__si; });
+  check((await p.textContent("#toast")).includes("沒存到"), "merchant 手機不讓存設定 → 提示目標價沒存到");
+  await p.click("#tgtClr"); await p.waitForTimeout(200);
+  check((await p.evaluate((k) => localStorage.getItem(k), key)) === null && (await p.textContent("#tgtSum")).includes("到價提醒"), "merchant 按「清除」→ 目標價刪掉");
+  dg = await digest();
+  check(!dg.includes("🎯"), "merchant 清除後看板不再寫目標價");
+  await p.evaluate((k) => { localStorage.setItem(k, "{壞掉"); localStorage.removeItem("jb_digest"); renderBoard(); }, key);
+  check(await p.locator(".mcard").count() > 0, "merchant 目標價設定壞掉（不是 JSON）→ 當作沒設，看板照常");
+  await p.evaluate((k) => localStorage.removeItem(k), key);
+  // 不在我的品項的（例：搜尋進來）不能設，告訴使用者去哪裡勾
+  const other = await p.evaluate(() => { const w = new Set(watchCrops()); return availableCrops().find((c) => !w.has(c)) || null; });
+  if (other) {
+    await p.evaluate((c) => openDetail(c, null), other); await p.waitForTimeout(400);
+    const t = (await p.textContent("#mktDetail .tgtbox").catch(() => "")) || "";
+    check((await p.locator("#tgtIn").count()) === 0 && t.includes("我的品項"), `merchant 不在我的品項的「${other}」：不能設目標價、說去哪裡勾`);
+  }
+  check(errs.length === 0, `merchant 目標價沒有 JS 錯誤${errs.length ? "：" + errs.slice(0, 2).join(" | ") : ""}`);
+  await p.close();
+}
+
 async function checkUpdateBar(ctx, url, name) {
   // 版本更新提醒：version.json 比較新才出現提示；一樣就不出現
   for (const newer of [true, false]) {
@@ -580,6 +680,7 @@ async function visitTabs(page, name, tabs) {
   await checkNewFeatures(f.page, "farmer", f.json, base);
   await f.page.goto(base, { waitUntil: "networkidle" });
   await checkNoJudgmentAndNames(f.page, "farmer");
+  await checkYearStatsAndMonths(ctx, base, "farmer");
   await checkLargeFont(ctx, base, "farmer");
   await checkTyphoonMap(ctx, base, "farmer");
   await checkUpdateBar(ctx, base, "farmer");
@@ -620,6 +721,8 @@ async function visitTabs(page, name, tabs) {
   await checkUpdateBar(ctx, base + "merchant/", "merchant");
   await checkMapPinch(ctx, base + "merchant/", "merchant");
   await checkNavBack(ctx, base + "merchant/");
+  await checkYearStatsAndMonths(ctx, base + "merchant/", "merchant");
+  await checkTargetPrice(ctx, base + "merchant/");
   await m.page.goto(base + "merchant/", { waitUntil: "networkidle" });
   await visitTabs(m.page, "merchant", ["compare", "weather", "market"]);
   const lsAll = await m.page.evaluate(() => Object.keys(localStorage));

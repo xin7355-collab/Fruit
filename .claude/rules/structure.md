@@ -31,6 +31,11 @@ paths:
 - 2026-10-31 深夜：兩支 `version.json`＋`checkUpdate`／`showUpdateBar`（新版提示列 `#updBar`）；精準進貨 `CAT_ORDER`、
   `cmpPick`／`cmpSugRender`（比價打字搜尋）、`locateRegion`／`nearestCounty`／`setRegion`（天氣頁換地區）。
 - 2026-11-01：精準進貨 `navPush`／`navRestore`／`goBack`／`updateBackBtn`（左上角 ‹ 上一頁、回原位置）；`TyMap.current()`（測試讀地圖 zoom）。
+- 2026-11-02：`Core.yearStats`（一年百分位、到貨量比；＝`price_core.year_stats`，`tests/test_parity.py` 比對）、`Core.monthIndex` 多 `vol`／`days`
+  （到貨量用日曆天平均）；兩支 `yearStatHTML`、`monthHeatHTML`（`MH_LOW_SUPPLY` 0.3 以下變灰，標題不下判斷）。
+  精準進貨目標價 `targets`／`setTarget`／`tgtStatus`／`targetRows`／`targetHTML`／`bindTarget`（`jb_target_市場`，只限我的品項，
+  顯示在 `digestHTML`）。`price_core.season_sample`／`season_baseline(min_years)`（`SEASON_MIN_YEARS` 維持 1：要 2 年回測變差）。
+  `backtest.py` S1（`eval_s1`、`_run_stock`／`_run_daily`／`_hindsight`）、S2（`s2_thresholds`／`s2_check`）。
 
 ## 這是什麼
 
