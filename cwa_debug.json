@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-05T15:19:12.731273+08:00",
+  "generated": "2026-11-05T23:45:59.593173+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -114,13 +114,13 @@
   },
   "O-A0002-001_rain": {
     "Station": {
-      "__list_len__": 1332,
+      "__list_len__": 1342,
       "__item__": {
         "StationName": "str=九份二山",
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-05T15:10:00+08:00"
+          "DateTime": "str=2026-11-05T23:40:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -175,7 +175,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-05T15:10:00+08:00"
+      "DateTime": "2026-11-05T23:40:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -232,7 +232,7 @@
     "StationName": "箔子寮",
     "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-05T15:00:00+08:00"
+      "DateTime": "2026-11-05T23:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -260,11 +260,11 @@
       "Now": {
         "Precipitation": "0.0"
       },
-      "WindDirection": "326.0",
-      "WindSpeed": "3.7",
-      "AirTemperature": "27.3",
-      "RelativeHumidity": "78",
-      "AirPressure": "1013.0",
+      "WindDirection": "31.0",
+      "WindSpeed": "3.4",
+      "AirTemperature": "25.3",
+      "RelativeHumidity": "86",
+      "AirPressure": "1016.8",
       "GustInfo": {
         "PeakGustSpeed": "-99",
         "Occurred_at": {
@@ -305,8 +305,8 @@
             "time": {
               "__list_len__": 3,
               "__item__": {
-                "startTime": "str=2026-11-05 12:00:00",
-                "endTime": "str=2026-11-05 18:00:00",
+                "startTime": "str=2026-11-06 00:00:00",
+                "endTime": "str=2026-11-06 06:00:00",
                 "parameter": {
                   "parameterName": "str=晴時多雲",
                   "parameterValue": "str=2"
