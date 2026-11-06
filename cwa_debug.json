@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-06T06:00:37.035097+08:00",
+  "generated": "2026-11-06T10:15:46.410047+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -114,13 +114,13 @@
   },
   "O-A0002-001_rain": {
     "Station": {
-      "__list_len__": 1343,
+      "__list_len__": 1342,
       "__item__": {
         "StationName": "str=九份二山",
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-06T05:50:00+08:00"
+          "DateTime": "str=2026-11-06T10:00:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -175,7 +175,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-06T05:50:00+08:00"
+      "DateTime": "2026-11-06T10:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -232,7 +232,7 @@
     "StationName": "箔子寮",
     "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-06T05:00:00+08:00"
+      "DateTime": "2026-11-06T10:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -260,11 +260,11 @@
       "Now": {
         "Precipitation": "0.0"
       },
-      "WindDirection": "70.0",
-      "WindSpeed": "0.7",
-      "AirTemperature": "24.3",
-      "RelativeHumidity": "89",
-      "AirPressure": "1015.9",
+      "WindDirection": "337.0",
+      "WindSpeed": "3.5",
+      "AirTemperature": "26.5",
+      "RelativeHumidity": "80",
+      "AirPressure": "1017.5",
       "GustInfo": {
         "PeakGustSpeed": "-99",
         "Occurred_at": {
@@ -275,9 +275,9 @@
       "DailyExtreme": {
         "DailyHigh": {
           "TemperatureInfo": {
-            "AirTemperature": "25.3",
+            "AirTemperature": "26.5",
             "Occurred_at": {
-              "DateTime": "2026-11-06T01:30:00+08:00"
+              "DateTime": "2026-11-06T10:00:00+08:00"
             }
           }
         },
