@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-07T23:53:23.418137+08:00",
+  "generated": "2026-11-08T04:10:07.183239+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -116,13 +116,13 @@
   },
   "O-A0002-001_rain": {
     "Station": {
-      "__list_len__": 1344,
+      "__list_len__": 1342,
       "__item__": {
         "StationName": "str=九份二山",
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-07T23:40:00+08:00"
+          "DateTime": "str=2026-11-08T04:00:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -177,7 +177,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-07T23:40:00+08:00"
+      "DateTime": "2026-11-08T04:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -234,7 +234,7 @@
     "StationName": "箔子寮",
     "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-07T23:00:00+08:00"
+      "DateTime": "2026-11-08T04:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -262,11 +262,11 @@
       "Now": {
         "Precipitation": "0.0"
       },
-      "WindDirection": "235.0",
+      "WindDirection": "102.0",
       "WindSpeed": "1.5",
-      "AirTemperature": "26.4",
-      "RelativeHumidity": "83",
-      "AirPressure": "1018.4",
+      "AirTemperature": "24.7",
+      "RelativeHumidity": "87",
+      "AirPressure": "1018.2",
       "GustInfo": {
         "PeakGustSpeed": "-99",
         "Occurred_at": {
@@ -277,17 +277,17 @@
       "DailyExtreme": {
         "DailyHigh": {
           "TemperatureInfo": {
-            "AirTemperature": "27.7",
+            "AirTemperature": "26.3",
             "Occurred_at": {
-              "DateTime": "2026-11-07T15:50:00+08:00"
+              "DateTime": "2026-11-08T00:40:00+08:00"
             }
           }
         },
         "DailyLow": {
           "TemperatureInfo": {
-            "AirTemperature": "23.0",
+            "AirTemperature": "24.7",
             "Occurred_at": {
-              "DateTime": "2026-11-07T06:50:00+08:00"
+              "DateTime": "2026-11-08T04:00:00+08:00"
             }
           }
         }
