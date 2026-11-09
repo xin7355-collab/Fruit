@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-09T06:26:12.341083+08:00",
+  "generated": "2026-11-09T09:55:43.940304+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -77,7 +77,7 @@
           "CwaTyNo": "str=31",
           "AnalysisData": {
             "Fix": {
-              "__list_len__": 12,
+              "__list_len__": 13,
               "__item__": {
                 "DateTime": "str=2026-11-06T08:00:00+08:00",
                 "CoordinateLongitude": "str=150.5",
@@ -94,15 +94,15 @@
             "Fix": {
               "__list_len__": 7,
               "__item__": {
-                "InitialTime": "str=2026-11-09T02:00:00+08:00",
+                "InitialTime": "str=2026-11-09T08:00:00+08:00",
                 "ForecastHour": "str=6",
-                "CoordinateLongitude": "str=135.1",
-                "CoordinateLatitude": "str=23.6",
-                "MaxWindSpeed": "str=35",
-                "MaxGustSpeed": "str=45",
-                "Pressure": "str=965",
-                "MovingSpeed": "str=14",
-                "MovingDirection": "str=NW",
+                "CoordinateLongitude": "str=135.0",
+                "CoordinateLatitude": "str=24.0",
+                "MaxWindSpeed": "str=38",
+                "MaxGustSpeed": "str=48",
+                "Pressure": "str=960",
+                "MovingSpeed": "str=4",
+                "MovingDirection": "str=NNW",
                 "Circle15ms": {
                   "Radius": "str=180"
                 },
@@ -119,13 +119,13 @@
   },
   "O-A0002-001_rain": {
     "Station": {
-      "__list_len__": 1343,
+      "__list_len__": 1342,
       "__item__": {
         "StationName": "str=九份二山",
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-09T06:20:00+08:00"
+          "DateTime": "str=2026-11-09T09:50:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -180,7 +180,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-09T06:20:00+08:00"
+      "DateTime": "2026-11-09T09:50:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -237,7 +237,7 @@
     "StationName": "箔子寮",
     "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-09T06:00:00+08:00"
+      "DateTime": "2026-11-09T09:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -261,28 +261,28 @@
       "TownCode": "10009190"
     },
     "WeatherElement": {
-      "Weather": "晴",
+      "Weather": "多雲",
       "Now": {
         "Precipitation": "0.0"
       },
-      "WindDirection": "42.0",
-      "WindSpeed": "5.2",
-      "AirTemperature": "23.8",
-      "RelativeHumidity": "76",
-      "AirPressure": "1019.6",
+      "WindDirection": "35.0",
+      "WindSpeed": "11.7",
+      "AirTemperature": "25.8",
+      "RelativeHumidity": "74",
+      "AirPressure": "1021.0",
       "GustInfo": {
-        "PeakGustSpeed": "11.1",
+        "PeakGustSpeed": "18.9",
         "Occurred_at": {
-          "WindDirection": "48.0",
-          "DateTime": "2026-11-09T05:34:00+08:00"
+          "WindDirection": "26.0",
+          "DateTime": "2026-11-09T08:50:00+08:00"
         }
       },
       "DailyExtreme": {
         "DailyHigh": {
           "TemperatureInfo": {
-            "AirTemperature": "25.2",
+            "AirTemperature": "25.8",
             "Occurred_at": {
-              "DateTime": "2026-11-09T00:10:00+08:00"
+              "DateTime": "2026-11-09T08:50:00+08:00"
             }
           }
         },
