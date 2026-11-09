@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-09T04:46:23.299027+08:00",
+  "generated": "2026-11-09T08:53:17.957439+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -125,7 +125,7 @@
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-09T04:40:00+08:00"
+          "DateTime": "str=2026-11-09T08:40:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -180,7 +180,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-09T04:40:00+08:00"
+      "DateTime": "2026-11-09T08:40:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -237,7 +237,7 @@
     "StationName": "箔子寮",
     "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-09T04:00:00+08:00"
+      "DateTime": "2026-11-09T08:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -265,32 +265,32 @@
       "Now": {
         "Precipitation": "0.0"
       },
-      "WindDirection": "55.0",
-      "WindSpeed": "6.6",
-      "AirTemperature": "24.1",
-      "RelativeHumidity": "76",
-      "AirPressure": "1018.9",
+      "WindDirection": "32.0",
+      "WindSpeed": "10.8",
+      "AirTemperature": "25.4",
+      "RelativeHumidity": "73",
+      "AirPressure": "1020.4",
       "GustInfo": {
-        "PeakGustSpeed": "12.2",
+        "PeakGustSpeed": "16.0",
         "Occurred_at": {
-          "WindDirection": "48.0",
-          "DateTime": "2026-11-09T03:02:00+08:00"
+          "WindDirection": "39.0",
+          "DateTime": "2026-11-09T07:56:00+08:00"
         }
       },
       "DailyExtreme": {
         "DailyHigh": {
           "TemperatureInfo": {
-            "AirTemperature": "25.2",
+            "AirTemperature": "25.4",
             "Occurred_at": {
-              "DateTime": "2026-11-09T00:10:00+08:00"
+              "DateTime": "2026-11-09T08:00:00+08:00"
             }
           }
         },
         "DailyLow": {
           "TemperatureInfo": {
-            "AirTemperature": "24.1",
+            "AirTemperature": "23.8",
             "Occurred_at": {
-              "DateTime": "2026-11-09T03:50:00+08:00"
+              "DateTime": "2026-11-09T06:00:00+08:00"
             }
           }
         }
@@ -406,12 +406,6 @@
   ],
   "hourly_taichung_sample": [
     {
-      "t": "2026-11-09T06:00:00+08:00",
-      "pop": 10,
-      "temp": 23,
-      "wx": "晴"
-    },
-    {
       "t": "2026-11-09T09:00:00+08:00",
       "pop": 10,
       "temp": 25,
@@ -427,6 +421,12 @@
       "t": "2026-11-09T15:00:00+08:00",
       "pop": 10,
       "temp": 27,
+      "wx": "晴"
+    },
+    {
+      "t": "2026-11-09T18:00:00+08:00",
+      "pop": 10,
+      "temp": 22,
       "wx": "晴"
     }
   ]
