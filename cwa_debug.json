@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-13T16:42:24.189853+08:00",
+  "generated": "2026-11-14T01:08:08.815655+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -116,13 +116,13 @@
   },
   "O-A0002-001_rain": {
     "Station": {
-      "__list_len__": 1339,
+      "__list_len__": 1340,
       "__item__": {
         "StationName": "str=九份二山",
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-13T16:30:00+08:00"
+          "DateTime": "str=2026-11-14T01:00:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -177,7 +177,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-13T16:30:00+08:00"
+      "DateTime": "2026-11-14T01:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -234,7 +234,7 @@
     "StationName": "箔子寮",
     "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-13T16:00:00+08:00"
+      "DateTime": "2026-11-14T00:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -258,15 +258,15 @@
       "TownCode": "10009190"
     },
     "WeatherElement": {
-      "Weather": "晴",
+      "Weather": "陰",
       "Now": {
         "Precipitation": "0.0"
       },
-      "WindDirection": "356.0",
-      "WindSpeed": "3.9",
-      "AirTemperature": "25.4",
-      "RelativeHumidity": "77",
-      "AirPressure": "1015.5",
+      "WindDirection": "81.0",
+      "WindSpeed": "1.5",
+      "AirTemperature": "22.5",
+      "RelativeHumidity": "89",
+      "AirPressure": "1015.9",
       "GustInfo": {
         "PeakGustSpeed": "-99",
         "Occurred_at": {
@@ -307,7 +307,7 @@
             "time": {
               "__list_len__": 3,
               "__item__": {
-                "startTime": "str=2026-11-13 18:00:00",
+                "startTime": "str=2026-11-14 00:00:00",
                 "endTime": "str=2026-11-14 06:00:00",
                 "parameter": {
                   "parameterName": "str=晴時多雲",
