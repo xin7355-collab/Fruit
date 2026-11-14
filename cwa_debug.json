@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-15T00:59:37.018493+08:00",
+  "generated": "2026-11-15T05:23:27.706373+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -116,13 +116,13 @@
   },
   "O-A0002-001_rain": {
     "Station": {
-      "__list_len__": 1329,
+      "__list_len__": 1328,
       "__item__": {
         "StationName": "str=九份二山",
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-15T00:50:00+08:00"
+          "DateTime": "str=2026-11-15T05:10:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -142,31 +142,31 @@
         },
         "RainfallElement": {
           "Now": {
-            "Precipitation": "str=1.5"
+            "Precipitation": "str=4.0"
           },
           "Past10Min": {
-            "Precipitation": "str=0.5"
+            "Precipitation": "str=0.0"
           },
           "Past1hr": {
-            "Precipitation": "str=1.5"
+            "Precipitation": "str=0.0"
           },
           "Past3hr": {
-            "Precipitation": "str=2.0"
+            "Precipitation": "str=1.5"
           },
           "Past6Hr": {
-            "Precipitation": "str=3.0"
+            "Precipitation": "str=4.0"
           },
           "Past12hr": {
-            "Precipitation": "str=29.5"
+            "Precipitation": "str=19.5"
           },
           "Past24hr": {
-            "Precipitation": "str=29.5"
+            "Precipitation": "str=32.0"
           },
           "Past2days": {
-            "Precipitation": "str=29.5"
+            "Precipitation": "str=32.0"
           },
           "Past3days": {
-            "Precipitation": "str=29.5"
+            "Precipitation": "str=32.0"
           }
         }
       }
@@ -177,7 +177,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-15T00:50:00+08:00"
+      "DateTime": "2026-11-15T05:10:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -217,7 +217,7 @@
         "Precipitation": "0.0"
       },
       "Past12hr": {
-        "Precipitation": "46.0"
+        "Precipitation": "7.5"
       },
       "Past24hr": {
         "Precipitation": "47.0"
@@ -234,7 +234,7 @@
     "StationName": "箔子寮",
     "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-15T00:00:00+08:00"
+      "DateTime": "2026-11-15T05:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -258,15 +258,15 @@
       "TownCode": "10009190"
     },
     "WeatherElement": {
-      "Weather": "多雲",
+      "Weather": "多雲有雨",
       "Now": {
-        "Precipitation": "43.0"
+        "Precipitation": "0.5"
       },
-      "WindDirection": "180.0",
-      "WindSpeed": "2.1",
-      "AirTemperature": "23.8",
-      "RelativeHumidity": "87",
-      "AirPressure": "1011.6",
+      "WindDirection": "51.0",
+      "WindSpeed": "2.9",
+      "AirTemperature": "22.4",
+      "RelativeHumidity": "95",
+      "AirPressure": "1011.5",
       "GustInfo": {
         "PeakGustSpeed": "-99",
         "Occurred_at": {
@@ -279,15 +279,15 @@
           "TemperatureInfo": {
             "AirTemperature": "24.3",
             "Occurred_at": {
-              "DateTime": "2026-11-14T09:40:00+08:00"
+              "DateTime": "2026-11-15T02:40:00+08:00"
             }
           }
         },
         "DailyLow": {
           "TemperatureInfo": {
-            "AirTemperature": "20.3",
+            "AirTemperature": "22.4",
             "Occurred_at": {
-              "DateTime": "2026-11-14T17:00:00+08:00"
+              "DateTime": "2026-11-15T04:50:00+08:00"
             }
           }
         }
@@ -307,11 +307,11 @@
             "time": {
               "__list_len__": 3,
               "__item__": {
-                "startTime": "str=2026-11-15 00:00:00",
-                "endTime": "str=2026-11-15 06:00:00",
+                "startTime": "str=2026-11-15 06:00:00",
+                "endTime": "str=2026-11-15 18:00:00",
                 "parameter": {
-                  "parameterName": "str=陰時多雲短暫陣雨或雷雨",
-                  "parameterValue": "str=17"
+                  "parameterName": "str=多雲時晴",
+                  "parameterValue": "str=3"
                 }
               }
             }
