@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-15T05:23:27.706373+08:00",
+  "generated": "2026-11-15T09:16:14.780740+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -116,13 +116,13 @@
   },
   "O-A0002-001_rain": {
     "Station": {
-      "__list_len__": 1328,
+      "__list_len__": 1329,
       "__item__": {
         "StationName": "str=九份二山",
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-15T05:10:00+08:00"
+          "DateTime": "str=2026-11-15T09:10:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -151,13 +151,13 @@
             "Precipitation": "str=0.0"
           },
           "Past3hr": {
-            "Precipitation": "str=1.5"
+            "Precipitation": "str=0.0"
           },
           "Past6Hr": {
-            "Precipitation": "str=4.0"
+            "Precipitation": "str=1.0"
           },
           "Past12hr": {
-            "Precipitation": "str=19.5"
+            "Precipitation": "str=4.5"
           },
           "Past24hr": {
             "Precipitation": "str=32.0"
@@ -177,7 +177,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-15T05:10:00+08:00"
+      "DateTime": "2026-11-15T09:10:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -217,7 +217,7 @@
         "Precipitation": "0.0"
       },
       "Past12hr": {
-        "Precipitation": "7.5"
+        "Precipitation": "0.0"
       },
       "Past24hr": {
         "Precipitation": "47.0"
@@ -234,7 +234,7 @@
     "StationName": "箔子寮",
     "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-15T05:00:00+08:00"
+      "DateTime": "2026-11-15T09:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -258,15 +258,15 @@
       "TownCode": "10009190"
     },
     "WeatherElement": {
-      "Weather": "多雲有雨",
+      "Weather": "多雲",
       "Now": {
-        "Precipitation": "0.5"
+        "Precipitation": "1.0"
       },
-      "WindDirection": "51.0",
-      "WindSpeed": "2.9",
-      "AirTemperature": "22.4",
-      "RelativeHumidity": "95",
-      "AirPressure": "1011.5",
+      "WindDirection": "41.0",
+      "WindSpeed": "4.8",
+      "AirTemperature": "24.2",
+      "RelativeHumidity": "88",
+      "AirPressure": "1013.2",
       "GustInfo": {
         "PeakGustSpeed": "-99",
         "Occurred_at": {
@@ -285,9 +285,9 @@
         },
         "DailyLow": {
           "TemperatureInfo": {
-            "AirTemperature": "22.4",
+            "AirTemperature": "22.3",
             "Occurred_at": {
-              "DateTime": "2026-11-15T04:50:00+08:00"
+              "DateTime": "2026-11-15T05:30:00+08:00"
             }
           }
         }
