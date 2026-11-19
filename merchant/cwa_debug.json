@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-19T03:36:29.945641+08:00",
+  "generated": "2026-11-19T09:29:57.603366+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -116,13 +116,13 @@
   },
   "O-A0002-001_rain": {
     "Station": {
-      "__list_len__": 1341,
+      "__list_len__": 1338,
       "__item__": {
         "StationName": "str=九份二山",
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-19T03:30:00+08:00"
+          "DateTime": "str=2026-11-19T09:20:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -177,7 +177,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-19T03:30:00+08:00"
+      "DateTime": "2026-11-19T09:20:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -234,7 +234,7 @@
     "StationName": "箔子寮",
     "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-19T03:00:00+08:00"
+      "DateTime": "2026-11-19T09:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -258,20 +258,20 @@
       "TownCode": "10009190"
     },
     "WeatherElement": {
-      "Weather": "陰",
+      "Weather": "多雲",
       "Now": {
         "Precipitation": "0.0"
       },
-      "WindDirection": "40.0",
-      "WindSpeed": "8.4",
-      "AirTemperature": "20.9",
-      "RelativeHumidity": "77",
-      "AirPressure": "1018.1",
+      "WindDirection": "34.0",
+      "WindSpeed": "8.5",
+      "AirTemperature": "20.6",
+      "RelativeHumidity": "71",
+      "AirPressure": "1020.1",
       "GustInfo": {
-        "PeakGustSpeed": "15.4",
+        "PeakGustSpeed": "14.2",
         "Occurred_at": {
-          "WindDirection": "38.0",
-          "DateTime": "2026-11-19T02:58:00+08:00"
+          "WindDirection": "32.0",
+          "DateTime": "2026-11-19T08:13:00+08:00"
         }
       },
       "DailyExtreme": {
@@ -285,9 +285,9 @@
         },
         "DailyLow": {
           "TemperatureInfo": {
-            "AirTemperature": "20.8",
+            "AirTemperature": "20.2",
             "Occurred_at": {
-              "DateTime": "2026-11-19T02:50:00+08:00"
+              "DateTime": "2026-11-19T08:00:00+08:00"
             }
           }
         }
@@ -307,8 +307,8 @@
             "time": {
               "__list_len__": 3,
               "__item__": {
-                "startTime": "str=2026-11-19 00:00:00",
-                "endTime": "str=2026-11-19 06:00:00",
+                "startTime": "str=2026-11-19 06:00:00",
+                "endTime": "str=2026-11-19 18:00:00",
                 "parameter": {
                   "parameterName": "str=晴時多雲",
                   "parameterValue": "str=2"
@@ -403,18 +403,6 @@
   ],
   "hourly_taichung_sample": [
     {
-      "t": "2026-11-19T03:00:00+08:00",
-      "pop": 10,
-      "temp": 20,
-      "wx": "陰"
-    },
-    {
-      "t": "2026-11-19T06:00:00+08:00",
-      "pop": 10,
-      "temp": 19,
-      "wx": "多雲"
-    },
-    {
       "t": "2026-11-19T09:00:00+08:00",
       "pop": 10,
       "temp": 20,
@@ -424,6 +412,18 @@
       "t": "2026-11-19T12:00:00+08:00",
       "pop": 10,
       "temp": 22,
+      "wx": "多雲"
+    },
+    {
+      "t": "2026-11-19T15:00:00+08:00",
+      "pop": 10,
+      "temp": 21,
+      "wx": "多雲"
+    },
+    {
+      "t": "2026-11-19T18:00:00+08:00",
+      "pop": 10,
+      "temp": 19,
       "wx": "多雲"
     }
   ]
