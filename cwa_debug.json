@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-23T06:44:56.370143+08:00",
+  "generated": "2026-11-23T11:41:00.143976+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -116,13 +116,13 @@
   },
   "O-A0002-001_rain": {
     "Station": {
-      "__list_len__": 1332,
+      "__list_len__": 1335,
       "__item__": {
         "StationName": "str=九份二山",
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-23T06:30:00+08:00"
+          "DateTime": "str=2026-11-23T11:30:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -177,7 +177,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-23T06:30:00+08:00"
+      "DateTime": "2026-11-23T11:30:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -234,7 +234,7 @@
     "StationName": "箔子寮",
     "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-23T06:00:00+08:00"
+      "DateTime": "2026-11-23T11:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -262,11 +262,11 @@
       "Now": {
         "Precipitation": "0.0"
       },
-      "WindDirection": "79.0",
-      "WindSpeed": "2.2",
-      "AirTemperature": "18.8",
-      "RelativeHumidity": "85",
-      "AirPressure": "1020.7",
+      "WindDirection": "15.0",
+      "WindSpeed": "3.2",
+      "AirTemperature": "23.4",
+      "RelativeHumidity": "70",
+      "AirPressure": "1020.5",
       "GustInfo": {
         "PeakGustSpeed": "-99",
         "Occurred_at": {
@@ -277,9 +277,9 @@
       "DailyExtreme": {
         "DailyHigh": {
           "TemperatureInfo": {
-            "AirTemperature": "19.7",
+            "AirTemperature": "23.6",
             "Occurred_at": {
-              "DateTime": "2026-11-23T00:10:00+08:00"
+              "DateTime": "2026-11-23T09:30:00+08:00"
             }
           }
         },
@@ -307,7 +307,7 @@
             "time": {
               "__list_len__": 3,
               "__item__": {
-                "startTime": "str=2026-11-23 06:00:00",
+                "startTime": "str=2026-11-23 12:00:00",
                 "endTime": "str=2026-11-23 18:00:00",
                 "parameter": {
                   "parameterName": "str=晴時多雲",
