@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-24T14:25:15.160186+08:00",
+  "generated": "2026-11-25T02:20:26.840403+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -116,13 +116,13 @@
   },
   "O-A0002-001_rain": {
     "Station": {
-      "__list_len__": 1332,
+      "__list_len__": 1333,
       "__item__": {
         "StationName": "str=九份二山",
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-24T14:20:00+08:00"
+          "DateTime": "str=2026-11-25T02:10:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -142,31 +142,31 @@
         },
         "RainfallElement": {
           "Now": {
-            "Precipitation": "str=0.0"
+            "Precipitation": "str=0.5"
           },
           "Past10Min": {
             "Precipitation": "str=0.0"
           },
           "Past1hr": {
-            "Precipitation": "str=0.0"
+            "Precipitation": "str=0.5"
           },
           "Past3hr": {
-            "Precipitation": "str=0.0"
+            "Precipitation": "str=0.5"
           },
           "Past6Hr": {
-            "Precipitation": "str=0.0"
+            "Precipitation": "str=0.5"
           },
           "Past12hr": {
-            "Precipitation": "str=0.0"
+            "Precipitation": "str=2.5"
           },
           "Past24hr": {
-            "Precipitation": "str=0.0"
+            "Precipitation": "str=2.5"
           },
           "Past2days": {
-            "Precipitation": "str=0.0"
+            "Precipitation": "str=2.5"
           },
           "Past3days": {
-            "Precipitation": "str=0.0"
+            "Precipitation": "str=2.5"
           }
         }
       }
@@ -177,7 +177,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-24T14:20:00+08:00"
+      "DateTime": "2026-11-25T02:10:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -234,7 +234,7 @@
     "StationName": "箔子寮",
     "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-24T14:00:00+08:00"
+      "DateTime": "2026-11-25T02:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -262,32 +262,32 @@
       "Now": {
         "Precipitation": "0.0"
       },
-      "WindDirection": "36.0",
-      "WindSpeed": "11.8",
-      "AirTemperature": "19.8",
-      "RelativeHumidity": "80",
-      "AirPressure": "1018.0",
+      "WindDirection": "40.0",
+      "WindSpeed": "7.7",
+      "AirTemperature": "17.6",
+      "RelativeHumidity": "64",
+      "AirPressure": "1018.7",
       "GustInfo": {
-        "PeakGustSpeed": "17.8",
+        "PeakGustSpeed": "15.6",
         "Occurred_at": {
-          "WindDirection": "49.0",
-          "DateTime": "2026-11-24T13:08:00+08:00"
+          "WindDirection": "61.0",
+          "DateTime": "2026-11-25T01:04:00+08:00"
         }
       },
       "DailyExtreme": {
         "DailyHigh": {
           "TemperatureInfo": {
-            "AirTemperature": "22.8",
+            "AirTemperature": "18.3",
             "Occurred_at": {
-              "DateTime": "2026-11-24T02:00:00+08:00"
+              "DateTime": "2026-11-25T00:30:00+08:00"
             }
           }
         },
         "DailyLow": {
           "TemperatureInfo": {
-            "AirTemperature": "19.6",
+            "AirTemperature": "17.6",
             "Occurred_at": {
-              "DateTime": "2026-11-24T13:20:00+08:00"
+              "DateTime": "2026-11-25T02:00:00+08:00"
             }
           }
         }
@@ -307,11 +307,11 @@
             "time": {
               "__list_len__": 3,
               "__item__": {
-                "startTime": "str=2026-11-24 12:00:00",
-                "endTime": "str=2026-11-24 18:00:00",
+                "startTime": "str=2026-11-25 00:00:00",
+                "endTime": "str=2026-11-25 06:00:00",
                 "parameter": {
-                  "parameterName": "str=陰天",
-                  "parameterValue": "str=7"
+                  "parameterName": "str=多雲",
+                  "parameterValue": "str=4"
                 }
               }
             }
@@ -403,28 +403,28 @@
   ],
   "hourly_taichung_sample": [
     {
-      "t": "2026-11-24T15:00:00+08:00",
-      "pop": 20,
-      "temp": 23,
-      "wx": "陰"
-    },
-    {
-      "t": "2026-11-24T18:00:00+08:00",
-      "pop": 20,
-      "temp": 20,
-      "wx": "多雲"
-    },
-    {
-      "t": "2026-11-24T21:00:00+08:00",
-      "pop": 20,
-      "temp": 19,
-      "wx": "多雲"
-    },
-    {
-      "t": "2026-11-25T00:00:00+08:00",
+      "t": "2026-11-25T03:00:00+08:00",
       "pop": 20,
       "temp": 18,
       "wx": "陰"
+    },
+    {
+      "t": "2026-11-25T06:00:00+08:00",
+      "pop": 20,
+      "temp": 17,
+      "wx": "陰"
+    },
+    {
+      "t": "2026-11-25T09:00:00+08:00",
+      "pop": 20,
+      "temp": 20,
+      "wx": "陰"
+    },
+    {
+      "t": "2026-11-25T12:00:00+08:00",
+      "pop": 20,
+      "temp": 24,
+      "wx": "多雲"
     }
   ]
 }
