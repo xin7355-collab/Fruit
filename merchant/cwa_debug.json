@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-25T10:47:30.704317+08:00",
+  "generated": "2026-11-25T20:50:46.262891+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -116,13 +116,13 @@
   },
   "O-A0002-001_rain": {
     "Station": {
-      "__list_len__": 1329,
+      "__list_len__": 1335,
       "__item__": {
         "StationName": "str=九份二山",
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-25T10:40:00+08:00"
+          "DateTime": "str=2026-11-25T20:40:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -142,7 +142,7 @@
         },
         "RainfallElement": {
           "Now": {
-            "Precipitation": "str=0.5"
+            "Precipitation": "str=1.0"
           },
           "Past10Min": {
             "Precipitation": "str=0.0"
@@ -154,19 +154,19 @@
             "Precipitation": "str=0.0"
           },
           "Past6Hr": {
-            "Precipitation": "str=0.0"
+            "Precipitation": "str=0.5"
           },
           "Past12hr": {
             "Precipitation": "str=0.5"
           },
           "Past24hr": {
-            "Precipitation": "str=2.5"
+            "Precipitation": "str=1.0"
           },
           "Past2days": {
-            "Precipitation": "str=2.5"
+            "Precipitation": "str=3.0"
           },
           "Past3days": {
-            "Precipitation": "str=2.5"
+            "Precipitation": "str=3.0"
           }
         }
       }
@@ -177,7 +177,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-25T10:40:00+08:00"
+      "DateTime": "2026-11-25T20:40:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -234,7 +234,7 @@
     "StationName": "箔子寮",
     "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-25T10:00:00+08:00"
+      "DateTime": "2026-11-25T20:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -262,24 +262,24 @@
       "Now": {
         "Precipitation": "0.0"
       },
-      "WindDirection": "42.0",
-      "WindSpeed": "7.4",
-      "AirTemperature": "19.3",
-      "RelativeHumidity": "64",
-      "AirPressure": "1019.2",
+      "WindDirection": "53.0",
+      "WindSpeed": "2.1",
+      "AirTemperature": "19.4",
+      "RelativeHumidity": "78",
+      "AirPressure": "1018.3",
       "GustInfo": {
-        "PeakGustSpeed": "13.0",
+        "PeakGustSpeed": "-99",
         "Occurred_at": {
-          "WindDirection": "49.0",
-          "DateTime": "2026-11-25T09:10:00+08:00"
+          "WindDirection": "-99",
+          "DateTime": "-99"
         }
       },
       "DailyExtreme": {
         "DailyHigh": {
           "TemperatureInfo": {
-            "AirTemperature": "19.3",
+            "AirTemperature": "21.0",
             "Occurred_at": {
-              "DateTime": "2026-11-25T10:00:00+08:00"
+              "DateTime": "2026-11-25T14:30:00+08:00"
             }
           }
         },
@@ -307,8 +307,8 @@
             "time": {
               "__list_len__": 3,
               "__item__": {
-                "startTime": "str=2026-11-25 06:00:00",
-                "endTime": "str=2026-11-25 18:00:00",
+                "startTime": "str=2026-11-25 18:00:00",
+                "endTime": "str=2026-11-26 06:00:00",
                 "parameter": {
                   "parameterName": "str=陰時多雲短暫雨",
                   "parameterValue": "str=10"
@@ -403,28 +403,28 @@
   ],
   "hourly_taichung_sample": [
     {
-      "t": "2026-11-25T12:00:00+08:00",
-      "pop": 20,
-      "temp": 24,
-      "wx": "多雲"
-    },
-    {
-      "t": "2026-11-25T15:00:00+08:00",
-      "pop": 20,
-      "temp": 24,
-      "wx": "陰"
-    },
-    {
-      "t": "2026-11-25T18:00:00+08:00",
-      "pop": 20,
-      "temp": 22,
-      "wx": "多雲"
-    },
-    {
       "t": "2026-11-25T21:00:00+08:00",
       "pop": 20,
       "temp": 20,
-      "wx": "多雲"
+      "wx": "陰"
+    },
+    {
+      "t": "2026-11-26T00:00:00+08:00",
+      "pop": 30,
+      "temp": 20,
+      "wx": "短暫雨"
+    },
+    {
+      "t": "2026-11-26T03:00:00+08:00",
+      "pop": 50,
+      "temp": 20,
+      "wx": "短暫雨"
+    },
+    {
+      "t": "2026-11-26T06:00:00+08:00",
+      "pop": 50,
+      "temp": 19,
+      "wx": "短暫雨"
     }
   ]
 }
