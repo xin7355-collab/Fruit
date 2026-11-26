@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-26 06:30",
+  "updated": "2026-11-26 12:24",
   "source": "CWA opendata (W-C0034-005 路徑潛勢)",
   "active": false,
   "tracking": true,
@@ -15,11 +15,11 @@
   "rain": {
     "h1": 0.5,
     "h3": 0.5,
-    "h6": 1.0,
+    "h6": 0.5,
     "h12": 1.0,
     "h24": 3.0,
     "d2": 3.5,
-    "d3": 13.0
+    "d3": 13.5
   },
   "forecast_gust_ms": null,
   "track": [
