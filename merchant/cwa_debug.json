@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-27T07:18:51.741552+08:00",
+  "generated": "2026-11-27T13:22:16.010825+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -122,7 +122,7 @@
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-27T07:10:00+08:00"
+          "DateTime": "str=2026-11-27T13:10:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -160,7 +160,7 @@
             "Precipitation": "str=0.0"
           },
           "Past24hr": {
-            "Precipitation": "str=1.0"
+            "Precipitation": "str=0.5"
           },
           "Past2days": {
             "Precipitation": "str=2.0"
@@ -177,7 +177,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-27T07:10:00+08:00"
+      "DateTime": "2026-11-27T13:10:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -234,7 +234,7 @@
     "StationName": "高鐵雲林",
     "StationId": "C0K580",
     "ObsTime": {
-      "DateTime": "2026-11-27T07:00:00+08:00"
+      "DateTime": "2026-11-27T13:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -262,11 +262,11 @@
       "Now": {
         "Precipitation": "0.0"
       },
-      "WindDirection": "19.0",
-      "WindSpeed": "1.3",
-      "AirTemperature": "20.8",
-      "RelativeHumidity": "85",
-      "AirPressure": "1015.9",
+      "WindDirection": "338.0",
+      "WindSpeed": "1.4",
+      "AirTemperature": "26.4",
+      "RelativeHumidity": "61",
+      "AirPressure": "1014.2",
       "GustInfo": {
         "PeakGustSpeed": "-99",
         "Occurred_at": {
@@ -277,9 +277,9 @@
       "DailyExtreme": {
         "DailyHigh": {
           "TemperatureInfo": {
-            "AirTemperature": "20.8",
+            "AirTemperature": "27.2",
             "Occurred_at": {
-              "DateTime": "2026-11-27T02:10:00+08:00"
+              "DateTime": "2026-11-27T11:30:00+08:00"
             }
           }
         },
@@ -307,11 +307,11 @@
             "time": {
               "__list_len__": 3,
               "__item__": {
-                "startTime": "str=2026-11-27 06:00:00",
+                "startTime": "str=2026-11-27 12:00:00",
                 "endTime": "str=2026-11-27 18:00:00",
                 "parameter": {
-                  "parameterName": "str=多雲時晴",
-                  "parameterValue": "str=3"
+                  "parameterName": "str=晴時多雲",
+                  "parameterValue": "str=2"
                 }
               }
             }
@@ -403,28 +403,28 @@
   ],
   "hourly_taichung_sample": [
     {
-      "t": "2026-11-27T09:00:00+08:00",
-      "pop": 10,
-      "temp": 22,
-      "wx": "晴"
-    },
-    {
-      "t": "2026-11-27T12:00:00+08:00",
-      "pop": 10,
-      "temp": 26,
-      "wx": "多雲"
-    },
-    {
       "t": "2026-11-27T15:00:00+08:00",
       "pop": 0,
       "temp": 26,
-      "wx": "晴"
+      "wx": "多雲"
     },
     {
       "t": "2026-11-27T18:00:00+08:00",
       "pop": 0,
       "temp": 23,
       "wx": "晴"
+    },
+    {
+      "t": "2026-11-27T21:00:00+08:00",
+      "pop": 0,
+      "temp": 22,
+      "wx": "晴"
+    },
+    {
+      "t": "2026-11-28T00:00:00+08:00",
+      "pop": 0,
+      "temp": 21,
+      "wx": "多雲"
     }
   ]
 }
