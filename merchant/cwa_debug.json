@@ -1,6 +1,6 @@
 {
   "key_set": true,
-  "generated": "2026-11-27T23:36:32.137698+08:00",
+  "generated": "2026-11-28T07:44:44.947179+08:00",
   "W-C0034-001_warning": {
     "info": {
       "__list_len__": 1,
@@ -116,13 +116,13 @@
   },
   "O-A0002-001_rain": {
     "Station": {
-      "__list_len__": 1335,
+      "__list_len__": 1337,
       "__item__": {
         "StationName": "str=九份二山",
         "StationId": "str=C1I230",
         "Maintainer": "str=中央氣象署",
         "ObsTime": {
-          "DateTime": "str=2026-11-27T23:30:00+08:00"
+          "DateTime": "str=2026-11-28T07:30:00+08:00"
         },
         "GeoInfo": {
           "Coordinates": {
@@ -163,10 +163,10 @@
             "Precipitation": "str=0.0"
           },
           "Past2days": {
-            "Precipitation": "str=2.0"
+            "Precipitation": "str=0.0"
           },
           "Past3days": {
-            "Precipitation": "str=3.0"
+            "Precipitation": "str=2.0"
           }
         }
       }
@@ -177,7 +177,7 @@
     "StationId": "A0K420",
     "Maintainer": "中央氣象署",
     "ObsTime": {
-      "DateTime": "2026-11-27T23:30:00+08:00"
+      "DateTime": "2026-11-28T07:30:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
@@ -231,42 +231,42 @@
     }
   },
   "O-A0001-001_temp_yunlin_sample": {
-    "StationName": "高鐵雲林",
-    "StationId": "C0K580",
+    "StationName": "箔子寮",
+    "StationId": "C0K600",
     "ObsTime": {
-      "DateTime": "2026-11-27T23:00:00+08:00"
+      "DateTime": "2026-11-28T07:00:00+08:00"
     },
     "GeoInfo": {
       "Coordinates": [
         {
           "CoordinateName": "TWD67",
           "CoordinateFormat": "decimal degrees",
-          "StationLatitude": "23.739206",
-          "StationLongitude": "120.409817"
+          "StationLatitude": "23.621487",
+          "StationLongitude": "120.131920"
         },
         {
           "CoordinateName": "WGS84",
           "CoordinateFormat": "decimal degrees",
-          "StationLatitude": "23.737456",
-          "StationLongitude": "120.417944"
+          "StationLatitude": "23.619744",
+          "StationLongitude": "120.140036"
         }
       ],
-      "StationAltitude": "26.0",
+      "StationAltitude": "14.0",
       "CountyName": "雲林縣",
-      "TownName": "虎尾鎮",
+      "TownName": "口湖鄉",
       "CountyCode": "10009",
-      "TownCode": "10009030"
+      "TownCode": "10009190"
     },
     "WeatherElement": {
       "Weather": "陰",
       "Now": {
         "Precipitation": "0.0"
       },
-      "WindDirection": "3.0",
-      "WindSpeed": "1.4",
-      "AirTemperature": "21.5",
-      "RelativeHumidity": "84",
-      "AirPressure": "1017.8",
+      "WindDirection": "30.0",
+      "WindSpeed": "6.9",
+      "AirTemperature": "21.6",
+      "RelativeHumidity": "73",
+      "AirPressure": "1019.7",
       "GustInfo": {
         "PeakGustSpeed": "-99",
         "Occurred_at": {
@@ -277,17 +277,17 @@
       "DailyExtreme": {
         "DailyHigh": {
           "TemperatureInfo": {
-            "AirTemperature": "27.2",
+            "AirTemperature": "22.4",
             "Occurred_at": {
-              "DateTime": "2026-11-27T11:30:00+08:00"
+              "DateTime": "2026-11-28T02:10:00+08:00"
             }
           }
         },
         "DailyLow": {
           "TemperatureInfo": {
-            "AirTemperature": "20.5",
+            "AirTemperature": "21.4",
             "Occurred_at": {
-              "DateTime": "2026-11-27T03:40:00+08:00"
+              "DateTime": "2026-11-28T05:40:00+08:00"
             }
           }
         }
@@ -307,11 +307,11 @@
             "time": {
               "__list_len__": 3,
               "__item__": {
-                "startTime": "str=2026-11-28 00:00:00",
-                "endTime": "str=2026-11-28 06:00:00",
+                "startTime": "str=2026-11-28 06:00:00",
+                "endTime": "str=2026-11-28 18:00:00",
                 "parameter": {
-                  "parameterName": "str=多雲",
-                  "parameterValue": "str=4"
+                  "parameterName": "str=晴時多雲",
+                  "parameterValue": "str=2"
                 }
               }
             }
@@ -403,27 +403,27 @@
   ],
   "hourly_taichung_sample": [
     {
-      "t": "2026-11-28T00:00:00+08:00",
-      "pop": 10,
-      "temp": 21,
-      "wx": "多雲"
-    },
-    {
-      "t": "2026-11-28T03:00:00+08:00",
-      "pop": 10,
-      "temp": 21,
-      "wx": "多雲"
-    },
-    {
-      "t": "2026-11-28T06:00:00+08:00",
-      "pop": 10,
-      "temp": 20,
-      "wx": "晴"
-    },
-    {
       "t": "2026-11-28T09:00:00+08:00",
       "pop": 0,
       "temp": 22,
+      "wx": "晴"
+    },
+    {
+      "t": "2026-11-28T12:00:00+08:00",
+      "pop": 0,
+      "temp": 25,
+      "wx": "晴"
+    },
+    {
+      "t": "2026-11-28T15:00:00+08:00",
+      "pop": 0,
+      "temp": 25,
+      "wx": "晴"
+    },
+    {
+      "t": "2026-11-28T18:00:00+08:00",
+      "pop": 0,
+      "temp": 21,
       "wx": "晴"
     }
   ]
